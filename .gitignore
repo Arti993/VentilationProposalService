@@ -1,0 +1,38 @@
+# Зависимости
+node_modules/
+.pnp
+.pnp.js
+
+# Сборка
+.next/
+out/
+build/
+dist/
+
+# Окружение — НИКОГДА не коммитить
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Исходный прайс и персональные данные клиентов
+# Раскомментируй, если не хочешь публиковать цены поставщика
+# data/price.json
+# data/price.normalized.json
+
+# Логи и временные файлы
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Vercel
+.vercel
