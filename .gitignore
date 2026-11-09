@@ -20,6 +20,10 @@ dist/
 # data/price.json
 # data/price.normalized.json
 
+# Результаты CLI-прогонов
+kp-*.csv
+*.tmp
+
 # Логи и временные файлы
 *.log
 npm-debug.log*

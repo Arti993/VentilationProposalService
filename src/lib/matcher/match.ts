@@ -80,7 +80,7 @@ export function matchLine(
     const seg = price.filter((p) => p.type === "elbow_segmented");
     return {
       status: "needs_llm",
-      candidates: seg.filter((p) => sameDims(p.dims, parsed.dims)),
+      candidates: seg.filter((p) => sameDims(p.dims, parsed.dims, p.type)),
       note: `Вид отвода не указан (сегментный или штампованный): "${line}"`,
     };
   }
@@ -89,7 +89,7 @@ export function matchLine(
   let candidates = price.filter(
     (p) =>
       p.type === parsed.type &&
-      sameDims(p.dims, parsed.dims) &&
+      sameDims(p.dims, parsed.dims, p.type) &&
       (parsed.angle === undefined || p.angle === parsed.angle),
   );
 
@@ -141,9 +141,32 @@ export function matchLine(
   };
 }
 
-function sameDims(a: number[], b: number[]): boolean {
+/**
+ * Сравнение размеров.
+ *
+ * ВАЖНО: в реальном прайсе врезки и тройники записаны только в ОДНОМ порядке
+ * («Врезка седло 160/200»), а клиент может написать наоборот («200/160»).
+ * 21 из 29 врезок и 20 из 28 тройников существуют лишь в одну сторону,
+ * поэтому сравнение по порядку даёт ложное «нет в прайсе».
+ *
+ * Для симметричных типов сравниваем как множество размеров.
+ * Для перехода порядок важен: 400/355 и 355/400 — разные изделия.
+ */
+function sameDims(a: number[], b: number[], type: ItemType): boolean {
   if (a.length !== b.length) return false;
+
+  if (isOrderInsensitive(type)) {
+    const sa = [...a].sort((x, y) => x - y);
+    const sb = [...b].sort((x, y) => x - y);
+    return sa.every((v, i) => v === sb[i]);
+  }
+
   return a.every((v, i) => v === b[i]);
+}
+
+/** Типы, у которых порядок диаметров не меняет изделие. */
+function isOrderInsensitive(t: ItemType): boolean {
+  return t === "tee" || t === "saddle" || t === "cross";
 }
 
 /** Типы, у которых угол — значимая часть позиции. */

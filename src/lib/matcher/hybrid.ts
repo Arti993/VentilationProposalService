@@ -22,15 +22,43 @@ export type HybridStatus =
 export interface HybridResult {
   line: string;
   qty: number;
+  /** Единица измерения из сметы клиента */
+  unit?: string;
+  /** Номер строки в исходном файле */
+  lineNo?: number;
   status: HybridStatus;
   /** Позиция прайса, если цену удалось поставить */
   item?: PriceItem;
   unitPrice?: number;
   total?: number;
+  /** Отход от нормы, который стоит показать человеку (единица, угол) */
+  warnings: string[];
   /** Откуда решение: детерминизм или LLM */
   source: "deterministic" | "llm" | "none";
   confidence: number;
   reason: string;
+}
+
+/** Единица, ожидаемая для типа позиции прайса. */
+const EXPECTED_UNIT: Record<string, string> = {
+  duct_spiral: "м.п.",
+  duct_straight: "м.п.",
+};
+
+/**
+ * Проверяет расхождения, которые не мешают поставить цену,
+ * но должны быть видны человеку перед отправкой КП.
+ */
+function unitWarnings(item: PriceItem, unit?: string): string[] {
+  if (!unit) return [];
+  const expected = EXPECTED_UNIT[item.type] ?? "шт";
+  const same =
+    (unit === "м.п." && expected === "м.п.") ||
+    (unit === "м²" && expected === "м²") ||
+    (unit === "шт" && expected === "шт") ||
+    (unit === "компл" && expected === "компл");
+  if (same) return [];
+  return [`Ед. изм. клиента «${unit}», в прайсе «${expected}» — проверить пересчёт`];
 }
 
 /** Допустимый отрыв по размеру для подбора кандидатов LLM (мм). */
@@ -65,20 +93,24 @@ function candidatesFor(line: string, price: PriceItem[], limit = 12): PriceItem[
 export async function processLine(
   line: string,
   price: PriceItem[],
-  opts: { useLlm?: boolean; model?: string } = {},
+  opts: { useLlm?: boolean; model?: string; qty?: number; unit?: string; lineNo?: number } = {},
 ): Promise<HybridResult> {
   const parsed = parseEstimateLine(line);
+  // Явно переданное количество из парсера сметы точнее, чем угаданное из строки
+  const qty = opts.qty ?? parsed.qty;
+  const unit = opts.unit ?? parsed.unit;
   const det: MatchResult = matchLine(line, price);
+  const base = { line, qty, unit, lineNo: opts.lineNo };
 
   // 1. Однозначное детерминированное совпадение — LLM не нужен
   if (det.status === "matched" && det.item) {
     return {
-      line,
-      qty: parsed.qty,
+      ...base,
       status: "priced",
       item: det.item,
       unitPrice: det.item.price,
-      total: round(det.item.price * parsed.qty),
+      total: round(det.item.price * qty),
+      warnings: unitWarnings(det.item, unit),
       source: "deterministic",
       confidence: 1,
       reason: det.note ?? "Точное совпадение типа и размеров",
@@ -88,9 +120,9 @@ export async function processLine(
   // 2. Точное отсутствие — LLM не поможет, цены нет
   if (det.status === "not_found") {
     return {
-      line,
-      qty: parsed.qty,
+      ...base,
       status: "not_found",
+      warnings: [],
       source: "deterministic",
       confidence: 0,
       reason: det.note ?? "Позиции нет в прайсе",
@@ -100,9 +132,9 @@ export async function processLine(
   // 3. Неоднозначно или не разобрано — спрашиваем LLM
   if (opts.useLlm === false) {
     return {
-      line,
-      qty: parsed.qty,
+      ...base,
       status: "needs_human",
+      warnings: [],
       source: "none",
       confidence: 0,
       reason: det.note ?? "Требуется уточнение",
@@ -117,9 +149,9 @@ export async function processLine(
 
   if (llm.offTopic) {
     return {
-      line,
-      qty: parsed.qty,
+      ...base,
       status: "off_topic",
+      warnings: [],
       source: "llm",
       confidence: llm.confidence,
       reason: llm.reason,
@@ -131,12 +163,12 @@ export async function processLine(
     const item = price.find((p) => p.id === llm.priceId);
     if (item) {
       return {
-        line,
-        qty: parsed.qty,
+        ...base,
         status: "priced",
         item,
         unitPrice: item.price,
-        total: round(item.price * parsed.qty),
+        total: round(item.price * qty),
+        warnings: unitWarnings(item, unit),
         source: "llm",
         confidence: llm.confidence,
         reason: llm.reason,
@@ -145,13 +177,29 @@ export async function processLine(
   }
 
   return {
-    line,
-    qty: parsed.qty,
+    ...base,
     status: "needs_human",
+    warnings: [],
     source: "llm",
     confidence: llm.confidence,
     reason: llm.reason,
   };
+}
+
+/** Обёртка для строк, пришедших из парсера файла сметы. */
+export async function processRow(
+  row: { name: string; qty: number; unit?: string; lineNo: number },
+  price: PriceItem[],
+  opts: { useLlm?: boolean; model?: string } = {},
+): Promise<HybridResult> {
+  const res = await processLine(row.name, price, {
+    ...opts,
+    qty: row.qty,
+    unit: row.unit,
+    lineNo: row.lineNo,
+  });
+  // Для отображения оставляем исходное наименование без служебного хвоста
+  return { ...res, line: row.name };
 }
 
 /** Обработать смету целиком, последовательно (бережёт лимиты провайдера). */
