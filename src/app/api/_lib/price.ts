@@ -1,36 +1,16 @@
 /**
- * Загрузка прайса.
+ * Загрузка прайса для API-роутов.
  *
- * В прототипе прайс лежит файлом в репозитории и нормализуется на старте.
- * Кэшируем результат в globalThis, чтобы не парсить 215 строк на каждый
- * запрос (в dev-режиме модули перезагружаются).
+ * Прайс живёт в Postgres (таблица price_items). Поэтому функция стала
+ * асинхронной: чтение из БД не может быть синхронным.
+ *
+ * Кэш остаётся — но уже в репозитории, со сроком 5 минут. Здесь только
+ * тонкая обёртка, чтобы роуты не знали деталей хранения.
  */
-import fs from "node:fs";
-import path from "node:path";
+import { loadPrice } from "@/db/repositories/price.ts";
 import type { PriceItem } from "@/lib/price/normalize.ts";
 
-const globalCache = globalThis as unknown as {
-  __priceCache?: PriceItem[];
-};
-
-/**
- * Читает нормализованный прайс.
- *
- * Берём именно price.normalized.json: он получен прогоном нормализатора и
- * проверен (215/215 строк). Нормализовать на лету означало бы гонять regex
- * по 215 строкам при каждом холодном старте.
- */
-export function getPrice(): PriceItem[] {
-  if (globalCache.__priceCache) return globalCache.__priceCache;
-
-  const file = path.join(process.cwd(), "data", "price.normalized.json");
-  if (!fs.existsSync(file)) {
-    throw new Error(
-      "Прайс не найден: data/price.normalized.json. Запустите: node scripts/normalize-price.ts",
-    );
-  }
-
-  const price = JSON.parse(fs.readFileSync(file, "utf8")) as PriceItem[];
-  globalCache.__priceCache = price;
-  return price;
+/** Читает прайс из БД (с кэшем на 5 минут). */
+export async function getPrice(): Promise<PriceItem[]> {
+  return loadPrice();
 }

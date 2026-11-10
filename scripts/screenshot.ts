@@ -151,8 +151,19 @@ async function main() {
     if (!clicked) throw new Error("кнопка демо-сметы не найдена");
     console.log("✓ клик по «Офисная смета»");
 
-    // Ждём обработки сметы (LLM может подумать)
-    await sleep(12_000);
+    // Ждём появления таблицы, а не фиксированное время: с БД загрузка
+    // может занять больше времени, чем с файлом, и тест был бы ложным.
+    let rows = 0;
+    for (let i = 0; i < 60; i++) {
+      await sleep(1000);
+      rows = await cdp.evaluate<number>(`document.querySelectorAll('tbody tr').length`);
+      if (rows > 0) break;
+    }
+    if (rows === 0) {
+      const err = await cdp.evaluate<string>(`document.body.innerText.slice(0, 400)`);
+      console.log("  таблица не появилась, текст страницы:", err.slice(0, 200));
+    }
+    console.log(`✓ таблица отрисована (${rows} строк за ${rows > 0 ? "?" : "60+"} с)`);
     await cdp.screenshot("ui-2-loaded.png");
     console.log("✓ ui-2-loaded.png");
 

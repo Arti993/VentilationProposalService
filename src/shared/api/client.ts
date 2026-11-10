@@ -53,3 +53,41 @@ export async function askAgent(
   }
   return json;
 }
+
+/**
+ * Скачивает КП в DOCX.
+ *
+ * Не используем <a href> напрямую: при ошибке сервера браузер показал бы
+ * JSON вместо сообщения. Поэтому качаем через fetch, проверяем ответ и
+ * сами создаём ссылку для сохранения.
+ */
+export async function downloadProposal(sessionId: string): Promise<void> {
+  const res = await fetch(`/api/proposal/${sessionId}`);
+
+  if (!res.ok) {
+    let msg = `Не удалось скачать КП (HTTP ${res.status})`;
+    try {
+      const json = (await res.json()) as ApiError;
+      if (json.error) msg = json.error;
+    } catch {
+      // Ответ не JSON — оставляем общий текст
+    }
+    throw new Error(msg);
+  }
+
+  // Имя файла берём из заголовка: сервер знает его лучше клиента
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  const asciiMatch = disposition.match(/filename="([^"]+)"/);
+  const fileName = utf8Match
+    ? decodeURIComponent(utf8Match[1]!)
+    : (asciiMatch?.[1] ?? "kp.docx");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}

@@ -58,11 +58,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     // Сессия берётся с сервера по ID — данные сметы от клиента не принимаются
     const store = new SessionStore();
     if (body.sessionId) {
-      const saved = getSession(body.sessionId);
+      const saved = await getSession(body.sessionId);
       if (saved) store.restore(saved);
     }
 
-    const agent = createAgent({ price: getPrice(), useLlm: true }, { store });
+    const agent = createAgent({ price: await getPrice(), useLlm: true }, { store });
 
     const state = (await agent.invoke({
       messages: [...historyToMessages(body.history), new HumanMessage(question)],
