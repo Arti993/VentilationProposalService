@@ -1,42 +1,40 @@
 # Зависимости
 node_modules/
-.pnp
-.pnp.js
 
-# Сборка
-.next/
-out/
-build/
-dist/
-
-# Окружение — НИКОГДА не коммитить
-.env
-.env.local
-.env.*.local
-!.env.example
-
-# Исходный прайс и персональные данные клиентов
-# Раскомментируй, если не хочешь публиковать цены поставщика
-# data/price.json
-# data/price.normalized.json
-
-# Результаты CLI-прогонов
-kp-*.csv
-*.tmp
-
-# Логи и временные файлы
-*.log
-npm-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-*.tsbuildinfo
+# Next.js
+/.next/
+/out/
 next-env.d.ts
 
-# ОС и редакторы
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+# Кэш npm (нужен локальный путь из-за песочницы)
+.npm-cache/
+
+# Окружение: секреты не коммитим
+.env
+.env.local
+.env*.local
+!.env.example
 
 # Vercel
 .vercel
+
+# Логи и временные файлы
+*.log
+
+# Результаты CLI-прогонов и UI-проверок
+kp-*.csv
+*.tmp
+ui-*.png
+ui-dom.html
+session-id.txt
+
+# Файлы, которые могут содержать клиентские данные
+data/*.csv
+
+# ОС и редакторы
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+*.swp

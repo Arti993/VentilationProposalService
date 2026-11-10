@@ -1,28 +1,41 @@
 /**
- * Разбор неоднозначных строк сметы через LLM.
+ * Разбор неоднозначных строк сметы через LLM (LangChain).
  *
  * Роль LLM здесь ровно одна: понять, ЧТО имел в виду клиент, если строгая
  * нормализация не справилась. Цену LLM не назначает — её всегда берём из БД
  * по id позиции. Это отсекает главный класс ошибок и атак (выдуманные цены).
+ *
+ * Структурированный вывод даёт LangChain: withStructuredOutput + Zod-схема.
+ * Модель физически не может вернуть что-то вне схемы.
  */
-import { chatJson, type ChatMessage } from "./client.ts";
+import { z } from "zod";
+import { createChatModel, createResolverPrompt, DEFAULT_RESOLVER_MODEL } from "./client.ts";
 import type { PriceItem } from "../price/normalize.ts";
 
 /** Шкала уверенности — жёстко зафиксирована в промпте, а не «на глаз». */
 export const CONFIDENCE_THRESHOLD = 0.85;
 
-export interface ResolverOutput {
-  /** id позиции прайса, если модель уверена; иначе null */
-  priceId: string | null;
-  /** Насколько модель уверена: 0..1 */
-  confidence: number;
-  /** Почему — короткое объяснение, обязательно непустое */
-  reason: string;
-  /** Неоднозначность сохраняется — нужен человек */
-  needsHuman: boolean;
-  /** Строка клиента относилась не к товарам (оффтоп) */
-  offTopic: boolean;
-}
+/** Zod-схема ответа модели. Источник правды для структурированного вывода. */
+export const ResolverSchema = z.object({
+  priceId: z
+    .string()
+    .nullable()
+    .describe("id позиции из списка кандидатов, либо null если подходящей нет"),
+  confidence: z
+    .number()
+    .describe("уверенность от 0 до 1 по шкале из инструкции"),
+  reason: z
+    .string()
+    .describe("конкретное обоснование решения, минимум 10 символов, не пустое"),
+  needsHuman: z
+    .boolean()
+    .describe("true, если требуется решение человека (неоднозначно или не найдено)"),
+  offTopic: z
+    .boolean()
+    .describe("true, если строка не относится к вентиляционному оборудованию"),
+});
+
+export type ResolverOutput = z.infer<typeof ResolverSchema>;
 
 export interface ResolverInput {
   /** Сырая строка из сметы */
@@ -72,20 +85,11 @@ function buildUserPrompt(input: ResolverInput): string {
   return lines.join("\n");
 }
 
-const SCHEMA = {
-  type: "object",
-  properties: {
-    priceId: { type: ["string", "null"] },
-    confidence: { type: "number" },
-    reason: { type: "string" },
-    needsHuman: { type: "boolean" },
-    offTopic: { type: "boolean" },
-  },
-  required: ["priceId", "confidence", "reason", "needsHuman", "offTopic"],
-  additionalProperties: false,
-} as const;
-
-/** Постпроверка ответа модели — не доверяем ей слепо. */
+/**
+ * Постпроверка ответа модели — не доверяем ей слепо.
+ * Zod гарантирует форму ответа, но не его правдивость: модель может
+ * придумать id или «уверенность» без обоснования. Проверяем кодом.
+ */
 export function validate(
   output: ResolverOutput,
   candidates: PriceItem[],
@@ -197,21 +201,28 @@ export async function resolveLine(
   const maxC = opts.maxCandidates ?? 12;
   const candidates = input.candidates.slice(0, maxC);
 
-  const messages: ChatMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: buildUserPrompt({ ...input, candidates }) },
-  ];
-
   try {
-    const raw = await chatJson<ResolverOutput>(messages, {
-      model: opts.model ?? process.env.LLM_RESOLVER_MODEL ?? "deepseek/deepseek-v4.1-flash-1017",
+    // LangChain: модель + структурированный вывод по Zod-схеме
+    const model = createChatModel({
+      model: opts.model ?? process.env.LLM_RESOLVER_MODEL ?? DEFAULT_RESOLVER_MODEL,
       temperature: 0,
       maxTokens: 600,
-      jsonSchema: { name: "resolve_line", schema: SCHEMA as unknown as Record<string, unknown> },
-    });
+    }).withStructuredOutput(ResolverSchema, { name: "resolve_line" });
+
+    const prompt = createResolverPrompt();
+    const chain = prompt.pipe(model);
+
+    const raw = (await chain.invoke({
+      system: SYSTEM_PROMPT,
+      user: buildUserPrompt({ ...input, candidates }),
+    })) as ResolverOutput;
+
     return validate(raw, candidates, input.line);
-  } catch {
-    return FALLBACK;
+  } catch (e) {
+    return {
+      ...FALLBACK,
+      reason: `LLM недоступен, требуется ручная проверка (${String(e).slice(0, 80)})`,
+    };
   }
 }
 
