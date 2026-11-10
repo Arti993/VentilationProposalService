@@ -38,3 +38,13 @@ Desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Артефакты проверок
+.session-test-id
+
+# Тестовые документы
+kp-*.docx
+.downloads/
+
+# Артефакты TypeScript
+tsconfig.tsbuildinfo

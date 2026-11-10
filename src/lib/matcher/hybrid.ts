@@ -157,6 +157,22 @@ export async function processLine(
     { model: opts.model },
   );
 
+  // ВАЖНО: needsHuman проверяем РАНЬШЕ offTopic.
+  // Если модель выставила оба флага, значит она сомневается и одновременно
+  // считает строку посторонней. В такой ситуации отправить позицию человеку
+  // безопаснее, чем молча вычеркнуть из КП: «нет в прайсе» исправимо,
+  // «это не про вентиляцию» — нет, менеджер может не заметить пропажу.
+  if (llm.needsHuman) {
+    return {
+      ...base,
+      status: "needs_human",
+      warnings: [],
+      source: "llm",
+      confidence: llm.confidence,
+      reason: llm.reason || "Требуется уточнение у менеджера",
+    };
+  }
+
   if (llm.offTopic) {
     return {
       ...base,
@@ -169,7 +185,7 @@ export async function processLine(
   }
 
   // Цену ставим только если LLM уверен И id существует в прайсе
-  if (llm.priceId !== null && !llm.needsHuman && llm.confidence >= CONFIDENCE_THRESHOLD) {
+  if (llm.priceId !== null && llm.confidence >= CONFIDENCE_THRESHOLD) {
     const item = price.find((p) => p.id === llm.priceId);
     if (item) {
       return {

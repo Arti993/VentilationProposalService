@@ -77,12 +77,15 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    const price = getPrice();
+    const price = await getPrice();
     const results = await processRows(rows, price, { concurrency: 3 });
 
     const session = createSession(file.name, results);
     const id = createSessionId();
-    saveSession(id, session);
+
+    // Сохраняем ДО ответа: если БД недоступна, пользователь узнает об
+    // ошибке сразу, а не получит «работающий» интерфейс с мёртвой сессией.
+    await saveSession(id, session);
 
     // Отдаём клиенту, но сессию на сервере тоже сохраняем: чат возьмёт
     // данные оттуда, а не из тела запроса — так их нельзя подменить.
