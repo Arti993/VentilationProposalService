@@ -38,12 +38,42 @@ export interface EstimateLine {
  *   "Воздуховод гибкий d315 — 12 м.п."
  *   "Тройник 160/100, 4 шт"
  *   "Отвод 45° Ø250 2шт"
+ *
+ * ВАЖНО: в названиях размеры идут парами ("315/200", "315х160"), и простой
+ * поиск последнего числа даёт ложное количество. Поэтому количество берём
+ * ТОЛЬКО если после него стоит единица измерения, либо если число отделено
+ * от наименования явным разделителем (запятая, тире, несколько пробелов).
  */
 export function parseEstimateLine(raw: string): EstimateLine {
-  const qtyMatch = raw.match(/(\d+(?:[.,]\d+)?)\s*(м\.?п\.?|м2|м²|шт\.?|компл\.?)?\s*$/i);
-  const qty = qtyMatch ? Number(qtyMatch[1].replace(",", ".")) : 1;
-  const unit = qtyMatch?.[2]?.toLowerCase().replace(/\./g, "") || undefined;
-  return { raw: raw.trim(), qty, unit };
+  const s = raw.trim();
+
+  // 1. Явный вид: "<название>  12 м.п." / "<название>, 4 шт"
+  const withUnit = s.match(
+    /^(.*?)(?:[\s,;—–-]+)(\d+(?:[.,]\d+)?)\s*(м\.?п\.?|п\.?м\.?|м2|м²|кв\.?м\.?|шт\.?|компл\.?|уп\.?)\s*$/i,
+  );
+  if (withUnit) {
+    const qty = Number(withUnit[2].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return {
+        raw: raw.trim(),
+        qty,
+        unit: withUnit[3].toLowerCase().replace(/\./g, ""),
+      };
+    }
+  }
+
+  // 2. Число в конце, отделённое запятой/тире/двойным пробелом:
+  //    "Тройник 315/200, 4" — но НЕ "Тройник 315/200"
+  const separated = s.match(/^(.*[\d)\s])[,;—–]\s*(\d+(?:[.,]\d+)?)\s*$/);
+  if (separated && !/[dф]\s*\d+$/i.test(s)) {
+    const qty = Number(separated[2].replace(",", "."));
+    if (Number.isFinite(qty) && qty > 0) {
+      return { raw: raw.trim(), qty, unit: undefined };
+    }
+  }
+
+  // 3. Количество не указано — это нормально для вопроса про цену.
+  return { raw: raw.trim(), qty: 1, unit: undefined };
 }
 
 /**

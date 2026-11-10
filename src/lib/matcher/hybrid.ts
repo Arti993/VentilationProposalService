@@ -202,6 +202,32 @@ export async function processRow(
   return { ...res, line: row.name };
 }
 
+/**
+ * Обработать список РАЗОБРАННЫХ строк сметы (с количеством и единицей).
+ * В отличие от processEstimate принимает EstimateRow, поэтому не теряет
+ * количество из таблицы клиента.
+ */
+export async function processRows(
+  rows: Array<{ name: string; qty: number; unit?: string; lineNo: number }>,
+  price: PriceItem[],
+  opts: { useLlm?: boolean; model?: string; concurrency?: number } = {},
+): Promise<HybridResult[]> {
+  const concurrency = Math.max(1, opts.concurrency ?? 3);
+  const results: HybridResult[] = new Array(rows.length);
+  let next = 0;
+
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= rows.length) return;
+      results[i] = await processRow(rows[i], price, opts);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, worker));
+  return results;
+}
+
 /** Обработать смету целиком, последовательно (бережёт лимиты провайдера). */
 export async function processEstimate(
   lines: string[],

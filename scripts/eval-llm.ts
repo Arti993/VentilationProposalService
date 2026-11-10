@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { PriceItem } from "../src/lib/price/normalize.ts";
 import { processLine } from "../src/lib/matcher/hybrid.ts";
 import { ALL_ESTIMATES } from "../src/lib/matcher/fixtures.ts";
-import { balance } from "../src/lib/llm/client.ts";
+import { fetchBalance as balance } from "../src/lib/llm/client.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");

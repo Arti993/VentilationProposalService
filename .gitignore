@@ -40,3 +40,6 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Кэш npm (песочница) 
+.npm-cache/
