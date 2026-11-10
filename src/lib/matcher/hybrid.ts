@@ -12,10 +12,20 @@ import { normalize, type PriceItem } from "../price/normalize.ts";
 import { matchLine, parseEstimateLine, type MatchResult } from "./match.ts";
 import { resolveLine, CONFIDENCE_THRESHOLD, type ResolverOutput } from "../llm/resolver.ts";
 
+/**
+ * Статус обработки позиции.
+ *
+ * ВАЖНО: набор значений должен совпадать с PositionStatus в entities,
+ * иначе сервер отдаст клиенту статус, которого тот не знает.
+ * «ambiguous» (несколько вариантов исполнения) — частный случай
+ * needs_human, но показываем его отдельно: менеджеру полезно знать,
+ * что дело в варианте, а не в отсутствии позиции.
+ */
 export type HybridStatus =
   | "priced" // цена есть, уверенность высокая
   | "not_found" // позиции нет в прайсе
   | "needs_human" // нужно решение человека
+  | "ambiguous" // есть варианты исполнения (например, R и без R)
   | "off_topic" // не про вентиляцию
   | "error";
 

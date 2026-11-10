@@ -8,52 +8,24 @@
  * ВАЖНО: в памяти лежит РЕЗУЛЬТАТ обработки, а не сырой текст. Это значит,
  * что цены в сессии уже зафиксированы матчером и никакой последующий
  * разговор не может их изменить. Сессия — только для чтения.
+ *
+ * Типы берём из entities: сервер и клиент должны говорить на одном языке,
+ * иначе расхождение контрактов всплывёт багом уже в браузере.
  */
 import type { HybridResult } from "../matcher/hybrid.ts";
+import type {
+  EstimatePosition,
+  EstimateSession,
+  EstimateStats,
+} from "../../entities/estimate/model/types.ts";
 
-export interface SessionPosition {
-  /** Порядковый номер позиции в КП: 1, 2, 3… — его называет человек */
-  posNo: number;
-  /** Номер строки в исходном файле (может отличаться из-за шапки) */
-  lineNo: number;
-  /** Как позицию назвал клиент */
-  name: string;
-  qty: number;
-  unit?: string;
-  status: HybridResult["status"];
-  /** Цена за единицу из прайса, если найдена */
-  unitPrice?: number;
-  /** Сумма по позиции */
-  total?: number;
-  /** Как позиция называется в прайсе */
-  matchedName?: string;
-  /** Объяснение решения */
-  reason?: string;
-  /** Откуда решение: детерминированное или LLM */
-  source?: string;
-  confidence?: number;
-}
+/** Позиция сессии — это доменная позиция сметы. */
+export type SessionPosition = EstimatePosition;
 
-export interface EstimateSession {
-  /** Имя файла или условное название сметы */
-  name: string;
-  loadedAt: string;
-  positions: SessionPosition[];
-  /** Сводная статистика, пересчитывается при загрузке */
-  stats: SessionStats;
-}
+/** Статистика сессии. */
+export type SessionStats = EstimateStats;
 
-export interface SessionStats {
-  total: number;
-  priced: number;
-  notFound: number;
-  needsHuman: number;
-  offTopic: number;
-  /** Сумма только по позициям с ценой */
-  totalSum: number;
-  /** Позиции, которые требуют внимания менеджера */
-  attention: number;
-}
+export type { EstimateSession };
 
 /** Считает статистику по списку позиций. Только чтение, без LLM. */
 export function computeStats(positions: SessionPosition[]): SessionStats {
@@ -126,7 +98,6 @@ export function createSession(
     source: r.source,
     confidence: r.confidence,
   }));
-
   return {
     name,
     loadedAt: new Date().toISOString(),
@@ -144,6 +115,17 @@ export class SessionStore {
   #session: EstimateSession | null = null;
 
   load(session: EstimateSession): void {
+    this.#session = session;
+  }
+
+  /**
+   * Восстанавливает ранее сохранённую сессию.
+   *
+   * Нужно для API-роутов: смета загружается одним запросом, а вопросы
+   * приходят другими. Сессия берётся из серверного хранилища по ID,
+   * при этом клиент не может подменить цены — он присылает только ID.
+   */
+  restore(session: EstimateSession): void {
     this.#session = session;
   }
 
