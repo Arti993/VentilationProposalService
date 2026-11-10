@@ -10,6 +10,7 @@ import { useState } from "react";
 import { FileSpreadsheet, MessageSquare } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { UploadEstimate } from "@features/upload-estimate";
+import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
 import { SummaryCards } from "@widgets/estimate-summary";
 import { EstimateTable } from "@widgets/estimate-table";
@@ -89,15 +90,21 @@ export function ProposalPage() {
                     })}
                   </p>
                 </div>
-                <button
-                  className="btn-secondary shrink-0 text-xs"
-                  onClick={() => {
-                    setSession(null);
-                    setPendingQuestion(null);
-                  }}
-                >
-                  Загрузить другую
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <DownloadProposal
+                    sessionId={session.id}
+                    pricedCount={session.stats.priced}
+                  />
+                  <button
+                    className="btn-secondary text-xs"
+                    onClick={() => {
+                      setSession(null);
+                      setPendingQuestion(null);
+                    }}
+                  >
+                    Загрузить другую
+                  </button>
+                </div>
               </div>
 
               <SummaryCards stats={session.stats} />
