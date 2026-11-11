@@ -193,6 +193,9 @@ function pricedTable(positions: EstimatePosition[]): Table {
       const shade = i % 2 === 1 ? "F6F7F9" : undefined;
 
       return new TableRow({
+        // Строка позиции не должна разрываться между страницами:
+        // разрезанная пополам строка читается как две разные позиции.
+        cantSplit: true,
         children: [
           cell([para([text(String(p.posNo), { size: 18, color: MUTED })])], { shade, width: 6 }),
           cell([para([text(name, { size: 18 })])], { shade, width: 46 }),
@@ -267,20 +270,13 @@ function totalRow(total: number, count: number): Table {
 function pendingBlock(positions: EstimatePosition[]): Paragraph[] {
   if (!positions.length) return [];
 
+  // Вводную фразу и лишние отступы убираем: на смете в 15 позиций этот
+  // блок распирал документ на вторую страницу. Смысл понятен из
+  // заголовка и пометки «цена уточняется» в строке.
   return [
     new Paragraph({
-      children: [text("Позиции, требующие уточнения", { bold: true, size: 22 })],
-      spacing: { before: 320, after: 120 },
-    }),
-    new Paragraph({
-      children: [
-        text(
-          "По перечисленным позициям цена уточняется и будет направлена отдельным сообщением. " +
-            "В итоговую сумму они не включены.",
-          { size: 18, color: MUTED },
-        ),
-      ],
-      spacing: { after: 160 },
+      children: [text("Позиции, требующие уточнения", { bold: true, size: 20 })],
+      spacing: { before: 200, after: 80 },
     }),
     ...positions.map(
       (p) =>
@@ -289,8 +285,9 @@ function pendingBlock(positions: EstimatePosition[]): Paragraph[] {
             text(`${p.posNo}. `, { size: 18, color: MUTED }),
             text(p.name, { size: 18 }),
             text(` — ${num(p.qty)} ${p.unit ?? "шт"}`, { size: 18, color: MUTED }),
+            text(",  цена уточняется", { size: 18, italics: true, color: MUTED }),
           ],
-          spacing: { after: 60 },
+          spacing: { after: 40 },
         }),
     ),
   ];
@@ -329,11 +326,11 @@ export async function buildProposalDocx(
 
   const children: Array<Paragraph | Table> = [
     header(proposalNo, dateStr),
-    new Paragraph({ text: "", spacing: { after: 240 } }),
+    new Paragraph({ text: "", spacing: { after: 180 } }),
 
     new Paragraph({
       children: [text("Уважаемые коллеги!", { size: 20 })],
-      spacing: { after: 120 },
+      spacing: { after: 100 },
     }),
     new Paragraph({
       children: [
@@ -343,7 +340,7 @@ export async function buildProposalDocx(
           { size: 20 },
         ),
       ],
-      spacing: { after: 200 },
+      spacing: { after: 160 },
     }),
   ];
 
@@ -354,7 +351,7 @@ export async function buildProposalDocx(
           text("Заказчик: ", { bold: true, size: 20 }),
           text(opts.customer, { size: 20 }),
         ],
-        spacing: { after: 200 },
+        spacing: { after: 160 },
       }),
     );
   }
@@ -362,10 +359,10 @@ export async function buildProposalDocx(
   children.push(
     new Paragraph({
       children: [text("Спецификация", { bold: true, size: 22 })],
-      spacing: { after: 160 },
+      spacing: { after: 120 },
     }),
     pricedTable(priced),
-    new Paragraph({ text: "", spacing: { after: 80 } }),
+    new Paragraph({ text: "", spacing: { after: 60 } }),
     totalRow(session.stats.totalSum, priced.length),
   );
 
@@ -378,7 +375,7 @@ export async function buildProposalDocx(
   children.push(
     new Paragraph({
       children: [text("Условия сотрудничества", { bold: true, size: 22 })],
-      spacing: { before: 400, after: 160 },
+      spacing: { before: 280, after: 120 },
     }),
     ...TERMS.map(
       (t) =>
@@ -390,16 +387,18 @@ export async function buildProposalDocx(
     ),
   );
 
-  // Подпись
+  // Подпись. Пустой абзац перед ней не используем: он наследует
+  // межстрочный интервал и раздувается до ~50px, из-за чего блок
+  // целиком уезжал на вторую страницу, хотя места хватало.
+  // Отступ задаём как "before" у первого абзаца.
   children.push(
-    new Paragraph({ text: "", spacing: { after: 400 } }),
     new Paragraph({
       children: [text("С уважением, отдел продаж", { size: 20 })],
-      spacing: { after: 60 },
+      spacing: { before: 240, after: 40 },
     }),
     new Paragraph({
       children: [text(`${COMPANY.name}  ·  ${COMPANY.phone}`, { size: 18, color: MUTED })],
-      spacing: { after: 60 },
+      spacing: { after: 40 },
     }),
     new Paragraph({
       children: [text(`${COMPANY.email}  ·  ${COMPANY.site}`, { size: 18, color: MUTED })],
