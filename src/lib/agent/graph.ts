@@ -25,6 +25,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 import { createChatModel, DEFAULT_AGENT_MODEL } from "../llm/client.ts";
 import { makeTools, type ToolContext } from "./tools.ts";
 import { makeSessionTools } from "./estimateTools.ts";
+import { makePriceSearchTool } from "./ragTool.ts";
 import { SessionStore } from "./session.ts";
 
 /** Состояние агента. */
@@ -73,9 +74,17 @@ const SYSTEM_PROMPT = `Ты — ассистент компании, котор�
 - find_item — найти позицию и цену в прайсе;
 - list_by_type — что есть в прайсе по типу товара;
 - calculate_total — посчитать итог по набору позиций;
+- search_price — поиск по прайсу на свободном языке (RAG). Используй,
+  когда человек называет позицию своими словами: «воздух спиральный»,
+  «отвод девяносто на двести пятьдесят». Возвращает кандидатов с ценами
+  из прайса и похожесть. Если ничего не вернул — позиции в прайсе нет;
 - estimate_summary — сводка по загруженной смете;
 - estimate_positions — позиции сметы, с фильтром по статусу;
 - explain_position — почему позиция получила такой статус (например, без цены).
+
+ПРО search_price: похожесть ниже 0.8 значит, что позиция может называться
+иначе. В этом случае уточни у человека, а не выдавай за точное совпадение.
+Цены из search_price — настоящие цены прайса, их называть можно.
 
 НУМЕРАЦИЯ: позиции в смете нумеруются с 1 (posNo). Когда человек говорит
 «позиция 4», он имеет в виду posNo=4. Не путай с номером строки в файле.`;
@@ -161,8 +170,16 @@ export function createAgent(
 ) {
   const store = opts.store ?? new SessionStore();
 
-  // Инструменты прайса + инструменты загруженной сметы
-  const tools = [...makeTools(ctx), ...makeSessionTools(store)];
+  // Инструменты прайса + инструменты загруженной сметы + RAG-поиск.
+  //
+  // RAG здесь как ДОПОЛНЕНИЕ к детерминированному поиску, а не замена:
+  // инструменты прайса работают по точным правилам, RAG помогает, когда
+  // пользователь называет позицию своими словами.
+  const tools = [
+    ...makeTools(ctx),
+    ...makeSessionTools(store),
+    makePriceSearchTool(),
+  ];
 
   const model = createChatModel({
     model: opts.model ?? process.env.LLM_AGENT_MODEL ?? DEFAULT_AGENT_MODEL,

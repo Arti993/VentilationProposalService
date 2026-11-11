@@ -20,7 +20,27 @@ import {
   index,
   uniqueIndex,
   serial,
+  customType,
 } from "drizzle-orm/pg-core";
+
+/**
+ * Тип pgvector. Drizzle не имеет встроенной поддержки, объявляем сами.
+ *
+ * Размерность 1024 — под модель baai/bge-m3 из polza.ai. Менять модель
+ * без переиндексации нельзя: размерность вектора зашита в тип колонки.
+ */
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return "vector(1024)";
+  },
+  toDriver(value) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value) {
+    const s = String(value).trim();
+    return s.slice(1, -1).split(",").map(Number);
+  },
+});
 
 /**
  * Прайс-лист. Одна строка — одна позиция каталога.
@@ -53,6 +73,16 @@ export const priceItems = pgTable(
     variant: text("variant"),
     /** Не удалось разобрать — требует внимания человека */
     unparsed: text("unparsed"),
+    /**
+     * Вектор названия — для поиска по смыслу.
+     *
+     * NULL означает «не проиндексировано»: прайс может быть обновлён, а
+     * эмбеддинги ещё не посчитаны. RAG должен это переживать и не
+     * выдавать пустоту как «ничего не найдено».
+     */
+    embedding: vector("embedding"),
+    /** Когда посчитан эмбеддинг — чтобы находить устаревшие */
+    embeddedAt: timestamp("embedded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
