@@ -48,3 +48,9 @@ kp-*.docx
 
 # ��������� TypeScript
 tsconfig.tsbuildinfo
+
+# Вывод диагностических скриптов
+*.txt
+!public/*.txt
+
+!examples/*.txt
