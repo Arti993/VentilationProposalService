@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { HumanMessage } from "@langchain/core/messages";
 import { createAgent, finalText, type AgentStateType } from "@/lib/agent/graph";
 import { SessionStore } from "@/lib/agent/session";
-import { configureTracingLogs } from "@/lib/agent/tracing";
+import { configureTracingLogs, sessionTags } from "@/lib/agent/tracing";
 import { getPrice } from "../_lib/price";
 import { getSession } from "../_lib/sessionStore";
 
@@ -68,9 +68,19 @@ export async function POST(req: Request): Promise<NextResponse> {
     // 16 секунд на чтение 215 строк тратить незачем.
     const agent = createAgent({ getPrice, useLlm: true }, { store });
 
-    const state = (await agent.invoke({
-      messages: [...historyToMessages(body.history), new HumanMessage(question)],
-    })) as AgentStateType;
+    // Имя и метаданные прогона — чтобы трассу в LangSmith можно было найти
+    // и отфильтровать, а не листать безымянный список. Включаем два
+    // признака, по которым чаще всего ищем: была ли загружена смета
+    // (это меняет поведение агента) и была ли история диалога.
+    const state = (await agent.invoke(
+      {
+        messages: [...historyToMessages(body.history), new HumanMessage(question)],
+      },
+      sessionTags("chat", {
+        hasEstimate: body.sessionId ? "with-estimate" : "no-estimate",
+        hasHistory: body.history?.length ? "with-history" : "first-turn",
+      }),
+    )) as AgentStateType;
 
     const toolCalls = state.messages.filter(
       (m) =>
