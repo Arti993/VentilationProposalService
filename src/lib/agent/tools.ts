@@ -13,9 +13,22 @@ import { TYPE_LABEL } from "../price/normalize.ts";
 import { matchLine } from "../matcher/match.ts";
 import { processLine } from "../matcher/hybrid.ts";
 
-/** Контекст, доступный инструментам (замыкание на текущий прайс). */
+/**
+ * Контекст, доступный инструментам.
+ *
+ * price — ФУНКЦИЯ, а не массив. Зачем: загрузка прайса из Neon стоит
+ * 16 секунд на холодном старте (215 строк постранично, пулер не
+ * выдерживает больше двух запросов в соединении). При этом на вопросы
+ * вида «сколько стоит отвод 90 на 250» агент зовёт search_price, который
+ * прайс не использует вовсе — он ищет вектором в базе.
+ *
+ * Грузить 16 секунд прайс ради вопроса, которому он не нужен, — самая
+ * дорогая ошибка в этом API. Поэтому загрузка ленивая: массив появится
+ * только если инструмент, которому он нужен, реально вызовут.
+ */
 export interface ToolContext {
-  price: PriceItem[];
+  /** Загружает прайс по требованию (с кэшем внутри репозитория). */
+  getPrice: () => Promise<PriceItem[]>;
   /** Разрешено ли инструменту искать через LLM для сложных строк */
   useLlm: boolean;
 }
@@ -27,7 +40,7 @@ export interface ToolContext {
 export function makeFindItemTool(ctx: ToolContext) {
   return tool(
     async ({ query }: { query: string }) => {
-      const res = await processLine(query, ctx.price, { useLlm: ctx.useLlm });
+      const res = await processLine(query, await ctx.getPrice(), { useLlm: ctx.useLlm });
 
       if (res.status === "priced" && res.item) {
         return JSON.stringify({
@@ -83,7 +96,7 @@ export function makeListByTypeTool(ctx: ToolContext) {
         });
       }
 
-      const items = ctx.price
+      const items = (await ctx.getPrice())
         .filter((p) => p.type === resolved)
         .map((p) => ({
           name: p.rawName,
@@ -127,10 +140,13 @@ export function makeCalculateTool(ctx: ToolContext) {
       const missing: Array<Record<string, unknown>> = [];
       let sum = 0;
 
+      // Прайс грузим один раз на весь расчёт, а не на каждую позицию
+      const price = await ctx.getPrice();
+
       for (const it of items) {
         // ВАЖНО: количество из аргумента инструмента обязательно передаём -
         // иначе processLine возьмёт qty=1 из строки и сумма будет неверной.
-        const res = await processLine(it.query, ctx.price, {
+        const res = await processLine(it.query, price, {
           useLlm: ctx.useLlm,
           qty: it.qty,
         });

@@ -19,6 +19,7 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { hybridSearch } from "../rag/hybrid.ts";
 import { SIMILARITY_FLOOR } from "../rag/search.ts";
+import { DEFAULT_UNIT, type ItemType } from "../price/normalize.ts";
 
 export function makePriceSearchTool() {
   return tool(
@@ -43,15 +44,19 @@ export function makePriceSearchTool() {
       return JSON.stringify({
         found: true,
         query,
+        // Похожесть наружу не отдаём намеренно. Модель цеплялась за число
+        // и на 0.73 добавляла «уточните» даже к верному ответу. Решение о
+        // том, та ли это позиция, уже принято предохранителями в
+        // hybridSearch (тип изделия и размеры) — числу здесь делать нечего.
         results: relevant.map((h) => ({
           code: h.code,
           name: h.rawName,
           price: h.price,
-          similarity: Number(h.vectorScore.toFixed(3)),
+          unit: DEFAULT_UNIT[h.type as ItemType] ?? "шт",
         })),
         note:
-          "Цены — из прайса, не придумывай свои. Похожесть < 0.8 значит, " +
-          "что позиция может называться иначе: уточни, а не выдавай за точное совпадение.",
+          "Цены — из прайса, не придумывай свои. Позиция уже проверена " +
+          "на соответствие типу изделия и размерам, поэтому называй цену уверенно.",
       });
     },
     {
