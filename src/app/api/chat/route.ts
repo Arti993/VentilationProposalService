@@ -62,7 +62,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       if (saved) store.restore(saved);
     }
 
-    const agent = createAgent({ price: await getPrice(), useLlm: true }, { store });
+    // getPrice передаём как функцию, а не результат вызова: прайс грузится
+    // только если инструмент его реально потребует. На вопрос «сколько
+    // стоит отвод» агент отвечает через search_price (RAG в базе), и
+    // 16 секунд на чтение 215 строк тратить незачем.
+    const agent = createAgent({ getPrice, useLlm: true }, { store });
 
     const state = (await agent.invoke({
       messages: [...historyToMessages(body.history), new HumanMessage(question)],
