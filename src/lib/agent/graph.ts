@@ -187,22 +187,46 @@ export function createAgent(
 ) {
   const store = opts.store ?? new SessionStore();
 
-  // Инструменты прайса + инструменты загруженной сметы + RAG-поиск.
+  // Инструменты выбираются ПОД ВОПРОС, а не даются все сразу.
   //
-  // RAG здесь как ДОПОЛНЕНИЕ к детерминированному поиску, а не замена:
-  // инструменты прайса работают по точным правилам, RAG помогает, когда
-  // пользователь называет позицию своими словами.
-  const tools = [
+  // Замерено: 7 инструментов стоят 1517 токенов промпта из 1557 — то есть
+  // 97%. Промпт занимает 97% всех токенов прогона (completion — 3%),
+  // поэтому лишние схемы дороже, чем кажется.
+  //
+  // Агенту почти никогда не нужны все семь: на вопрос про цену позиции
+  // он выберет search_price, на вопрос про смету — estimate_*. Группа
+  // определяется по тексту вопроса теми же регулярками, что и страж —
+  // без LLM, без задержки.
+  const allTools = [
     ...makeTools(ctx),
     ...makeSessionTools(store),
     makePriceSearchTool(),
   ];
 
-  const model = createChatModel({
-    model: opts.model ?? process.env.LLM_AGENT_MODEL ?? DEFAULT_AGENT_MODEL,
-    temperature: 0,
-    maxTokens: 1200,
-  }).bindTools(tools);
+  /** Какие группы инструментов нужны для этого вопроса. */
+  function toolsFor(text: string): typeof allTools {
+    const hasEstimate = store.current !== null;
+    const lower = text.toLowerCase();
+
+    // Про смету спрашивают словами «смета», «позиция», «итог», «КП»
+    const asksAboutEstimate =
+      hasEstimate &&
+      /смет|позици|итог|кт\b|кп\b|коммерческ|без\s+цены|не\s+нашл/i.test(lower);
+
+    if (asksAboutEstimate) {
+      // Сметные инструменты + поиск по прайсу: агент может уточнить цену
+      return [...makeSessionTools(store), makePriceSearchTool()];
+    }
+
+    // Обычный вопрос про товар: инструменты прайса + RAG.
+    // calculate_total нужен, когда спрашивают про количество и сумму.
+    const asksToCalculate = /посчита|расчит|стоимость|сколько\s+будет|итого|сумм/i.test(lower);
+    const priceTools = makeTools(ctx).filter(
+      (t) => asksToCalculate || t.name !== "calculate_total",
+    );
+
+    return [...priceTools, makePriceSearchTool()];
+  }
 
   /** Узел модели: думает и решает, какой инструмент вызвать. */
   async function agentNode(state: AgentStateType): Promise<Partial<AgentStateType>> {
@@ -212,12 +236,33 @@ export function createAgent(
       new SystemMessage(SYSTEM_PROMPT + sessionContext(store)),
       ...state.messages,
     ];
+
+    // Набор инструментов зависит от вопроса, поэтому модель привязывается
+    // здесь, а не один раз при создании агента. bindTools не делает сетевых
+    // вызовов — это только подготовка описания для запроса, так что платим
+    // лишь за уменьшение промпта.
+    const lastHuman = [...state.messages].reverse().find((m) => m._getType() === "human");
+    const question = typeof lastHuman?.content === "string" ? lastHuman.content : "";
+
+    const model = createChatModel({
+      model: opts.model ?? process.env.LLM_AGENT_MODEL ?? DEFAULT_AGENT_MODEL,
+      temperature: 0,
+      maxTokens: 1200,
+    }).bindTools(toolsFor(question));
+
     const response = await model.invoke(messages);
     return { messages: [response] };
   }
 
-  /** Инструменты выполняются в LangGraph стандартным узлом. */
-  const toolNode = new ToolNode(tools);
+  /**
+   * Узел исполнения инструментов.
+   *
+   * Здесь получает ВСЕ инструменты, а не подмножество: модель видит только
+   * выбранные схемы, но исполнить вызванный инструмент нужно по имени.
+   * Если дать подмножество, вызов «search_price» не найдётся в узле для
+   * вопросов про смету — и агент упадёт посреди ответа.
+   */
+  const toolNode = new ToolNode(allTools);
 
   /** Условие: есть ли вызов инструмента в последнем сообщении. */
   function shouldCallTools(state: AgentStateType): "tools" | "end" {
