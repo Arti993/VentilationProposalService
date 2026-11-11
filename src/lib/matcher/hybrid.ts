@@ -11,6 +11,7 @@
 import { normalize, type PriceItem } from "../price/normalize.ts";
 import { matchLine, parseEstimateLine, type MatchResult } from "./match.ts";
 import { resolveLine, CONFIDENCE_THRESHOLD, type ResolverOutput } from "../llm/resolver.ts";
+import { digitsFromWords } from "../rag/hybrid.ts";
 
 /**
  * Статус обработки позиции.
@@ -109,7 +110,14 @@ export async function processLine(
   // Явно переданное количество из парсера сметы точнее, чем угаданное из строки
   const qty = opts.qty ?? parsed.qty;
   const unit = opts.unit ?? parsed.unit;
-  const det: MatchResult = matchLine(line, price);
+
+  // Числа словами превращаем в цифры ДО разбора. В сметах пишут
+  // «тройник триста пятнадцать на двести», и без этого размеры не
+  // извлекаются вовсе: normalize() видит слово, а не число.
+  // Функция живёт в RAG-модуле, потому что нужна и там; здесь тот же
+  // приём применяется к детерминированному пути.
+  const digits = digitsFromWords(line);
+  const det: MatchResult = matchLine(digits, price);
   const base = { line, qty, unit, lineNo: opts.lineNo };
 
   // 1. Однозначное детерминированное совпадение — LLM не нужен
