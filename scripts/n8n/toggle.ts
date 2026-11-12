@@ -12,7 +12,18 @@
 import { readFileSync } from "node:fs";
 
 const N8N = "http://localhost:5678";
-const NAME = "КП: уведомление о новом предложении";
+
+/**
+ * Сценарии по короткому имени.
+ *
+ * Явный список, а не поиск по подстроке «КП:»: скрипт меняет состояние
+ * того, что реально рассылает сообщения людям. Опечатка в аргументе
+ * должна падать с ошибкой, а не находить первый похожий сценарий.
+ */
+const WORKFLOWS: Record<string, string> = {
+  notify: "КП: уведомление о новом предложении",
+  reminders: "КП: напоминания по сделкам",
+};
 
 function env(name: string): string {
   const text = readFileSync(".env.local", "utf8");
@@ -39,11 +50,19 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function main() {
-  const action = (process.argv[2] ?? "status") as "on" | "off" | "status";
+  const [action, key] = [process.argv[2] ?? "status", process.argv[3] ?? "notify"];
+
+  if (!["on", "off", "status"].includes(action)) {
+    throw new Error(`Действие должно быть on, off или status — получено «${action}»`);
+  }
+  const name = WORKFLOWS[key];
+  if (!name) {
+    throw new Error(`Неизвестный сценарий «${key}». Доступны: ${Object.keys(WORKFLOWS).join(", ")}`);
+  }
 
   const all = await api<{ data: Array<{ id: string; name: string; active: boolean }> }>("/workflows");
-  const wf = all.data.find((w) => w.name === NAME);
-  if (!wf) throw new Error(`Сценарий «${NAME}» не найден`);
+  const wf = all.data.find((w) => w.name === name);
+  if (!wf) throw new Error(`Сценарий «${name}» не найден в n8n`);
 
   if (action === "status") {
     console.log(`${wf.name}: ${wf.active ? "АКТИВЕН" : "выключен"} (id ${wf.id})`);
@@ -51,13 +70,12 @@ async function main() {
   }
 
   if (action === "on") {
-    if (wf.active) {
-      console.log("Уже активен — ничего не делаю.");
-      return;
-    }
     await api(`/workflows/${wf.id}/activate`, { method: "POST", body: JSON.stringify({}) });
-    console.log(`ВКЛЮЧЁН: ${wf.name}`);
-    console.log(`Проверка будет каждые 15 минут. Первый запуск — по расписанию.`);
+    // Активации мало: планировщик видит только опубликованную версию.
+    // Без publish сценарий показывает «активен», но не запускается —
+    // ровно на этом я потерял час в первом сценарии.
+    await api(`/workflows/${wf.id}/publish`, { method: "POST", body: JSON.stringify({}) });
+    console.log(`ВКЛЮЧЁН и ОПУБЛИКОВАН: ${wf.name}`);
     return;
   }
 

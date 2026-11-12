@@ -29,6 +29,38 @@ const STATEMENTS: Array<{ title: string; run: (sql: Parameters<Parameters<typeof
     title: "частичный индекс estimates_pending_idx",
     run: (sql) => sql`create index if not exists estimates_pending_idx on estimates (created_at) where notified_at is null`,
   },
+  {
+    title: "таблица proposal_log",
+    run: (sql) => sql`
+      create table if not exists proposal_log (
+        id serial primary key,
+        estimate_id text not null,
+        name text not null,
+        total_sum numeric(14,2) not null,
+        priced_count integer not null,
+        total_count integer not null,
+        stage text not null default 'sent',
+        reminders_sent integer not null default 0,
+        next_reminder_at timestamptz,
+        closed_at timestamptz,
+        note text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )
+    `,
+  },
+  {
+    title: "индекс по сроку напоминания",
+    run: (sql) => sql`create index if not exists proposal_log_reminder_idx on proposal_log (next_reminder_at)`,
+  },
+  {
+    title: "уникальный индекс по estimate_id",
+    run: (sql) => sql`create unique index if not exists proposal_log_estimate_idx on proposal_log (estimate_id)`,
+  },
+  {
+    title: "индекс по стадии",
+    run: (sql) => sql`create index if not exists proposal_log_stage_idx on proposal_log (stage, created_at)`,
+  },
 ];
 
 async function main() {

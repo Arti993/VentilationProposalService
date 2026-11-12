@@ -25,6 +25,7 @@
  */
 import { NextResponse } from "next/server";
 import { withRetry } from "@/db/connection";
+import { logProposal } from "@/db/repositories/proposalLog";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -145,6 +146,27 @@ export async function GET(req: Request): Promise<Response> {
         ),
       ),
     }));
+
+    // Попутно заводим записи в журнале — это и есть «таблица», ради
+    // которой обычно тянут Google Sheets. Делаем после выдачи и не
+    // роняем запрос при ошибке: главное — отдать КП в n8n, а журнал
+    // можно дозаписать следующим запуском (logProposal идемпотентен).
+    for (const p of proposals) {
+      try {
+        await logProposal({
+          estimateId: p.id,
+          name: p.name,
+          totalSum: p.totalSum,
+          pricedCount: p.pricedCount,
+          totalCount: p.totalCount,
+        });
+      } catch (e) {
+        console.warn(
+          `[api/proposals/recent] журнал для ${p.id.slice(0, 8)}: ` +
+            (e instanceof Error ? e.message : String(e)),
+        );
+      }
+    }
 
     return NextResponse.json(
       { ok: true, count: proposals.length, proposals },
