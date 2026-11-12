@@ -1,5 +1,7 @@
 # VentilationProposalService
 
+[![Проверка](https://github.com/Arti993/VentilationProposalService/actions/workflows/check.yml/badge.svg)](https://github.com/Arti993/VentilationProposalService/actions/workflows/check.yml)
+
 Сервис автоматической подготовки коммерческих предложений (КП) по сметам клиентов
 для вентиляционного оборудования.
 
