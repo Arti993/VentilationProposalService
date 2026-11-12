@@ -22,6 +22,7 @@ import {
   serial,
   customType,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Тип pgvector. Drizzle не имеет встроенной поддержки, объявляем сами.
@@ -116,9 +117,96 @@ export const estimates = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     /** Срок жизни: чистим крон-задачей или при чтении */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+    /**
+     * Когда КП отдали внешней автоматизации (n8n).
+     *
+     * Без этой отметки опрос «что нового» возвращал бы одни и те же
+     * сметы на каждом запуске, и клиент получал бы напоминание каждые
+     * 15 минут. null — ещё не отдавали.
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
   },
-  (t) => [index("estimates_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("estimates_expires_idx").on(t.expiresAt),
+    // Частичный индекс: опрос ищет только необработанные строки, а их
+    // со временем становится всё меньше. Размер индекса растёт с числом
+    // ожидающих отправки, а не с общим числом смет.
+    index("estimates_pending_idx").on(t.createdAt).where(sql`notified_at is null`),
+  ],
 );
+
+/**
+ * Реестр отправленных КП — журнал для менеджера.
+ *
+ * Заменяет Google Sheets: та же задача (видеть все КП и их судьбу в одном
+ * месте), но без внешнего сервиса, OAuth и ещё одного места, где могут
+ * утечь данные клиентов. Плюс данные остаются в той же базе, и по ним
+ * можно считать отчёты обычным SQL, не выгружая таблицу.
+ *
+ * ЧЕМ ОТЛИЧАЕТСЯ ОТ estimates
+ *
+ * estimates — рабочая сессия с TTL 24 часа, её удаляет очистка.
+ * proposal_log — журнал без срока жизни: клиенты возвращаются через
+ * недели и месяцы, и история нужна дольше, чем живёт документ.
+ *
+ * Отдельная таблица, а не поля в estimates, потому что у записи журнала
+ * своя жизнь: один и тот же КП может быть отправлен повторно, статус
+ * меняется независимо от документа, а удаление сессии не должно стирать
+ * историю продаж.
+ */
+export const proposalLog = pgTable(
+  "proposal_log",
+  {
+    id: serial("id").primaryKey(),
+    /** Ссылка на сессию. Не каскадная: журнал переживает удаление сметы. */
+    estimateId: text("estimate_id").notNull(),
+    /** Название файла клиента на момент отправки */
+    name: text("name").notNull(),
+    /** Сумма и количество позиций — снимком, как и цены */
+    totalSum: numeric("total_sum", { precision: 14, scale: 2 }).notNull(),
+    pricedCount: integer("priced_count").notNull(),
+    totalCount: integer("total_count").notNull(),
+
+    /**
+     * Стадия сделки:
+     *   sent      — отправили клиенту, ответа ждём
+     *   reminded  — напомнили один раз
+     *   closed    — клиент ответил, дальше ведёт менеджер
+     *   lost      — отказался или пропал
+     *
+     * Строкой, а не enum: стадии меняются чаще, чем схема, а ALTER TYPE
+     * в Postgres — операция, требующая блокировки. Ограничение ставим
+     * проверкой на уровне кода и списком ниже.
+     */
+    stage: text("stage").notNull().default("sent"),
+    /** Сколько напоминаний отправлено: 0, 1, 2. Дальше не дёргаем. */
+    remindersSent: integer("reminders_sent").notNull().default(0),
+    /** Когда отправлять следующее напоминание. null — не планируется. */
+    nextReminderAt: timestamp("next_reminder_at", { withTimezone: true }),
+    /** Когда менеджер закрыл сделку */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    /** Комментарий менеджера */
+    note: text("note"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // Поиск «кому пора напомнить»: идёт по индексу, а не по всей таблице
+    index("proposal_log_reminder_idx").on(t.nextReminderAt),
+    // УНИКАЛЬНЫЙ, а не обычный: на него опирается on conflict do nothing
+    // при записи. Без уникальности повторный запуск сценария создал бы
+    // дубль, и клиент получил бы два напоминания об одном КП.
+    uniqueIndex("proposal_log_estimate_idx").on(t.estimateId),
+    // Отчёты по стадиям и датам
+    index("proposal_log_stage_idx").on(t.stage, t.createdAt),
+  ],
+);
+
+/** Допустимые стадии. Один источник правды для кода и проверок. */
+export const PROPOSAL_STAGES = ["sent", "reminded", "closed", "lost"] as const;
+export type ProposalStage = (typeof PROPOSAL_STAGES)[number];
 
 /**
  * Позиция сметы.
