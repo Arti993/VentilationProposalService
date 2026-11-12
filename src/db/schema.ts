@@ -22,6 +22,7 @@ import {
   serial,
   customType,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Тип pgvector. Drizzle не имеет встроенной поддержки, объявляем сами.
@@ -116,8 +117,23 @@ export const estimates = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     /** Срок жизни: чистим крон-задачей или при чтении */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+
+    /**
+     * Когда КП отдали внешней автоматизации (n8n).
+     *
+     * Без этой отметки опрос «что нового» возвращал бы одни и те же
+     * сметы на каждом запуске, и клиент получал бы напоминание каждые
+     * 15 минут. null — ещё не отдавали.
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
   },
-  (t) => [index("estimates_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("estimates_expires_idx").on(t.expiresAt),
+    // Частичный индекс: опрос ищет только необработанные строки, а их
+    // со временем становится всё меньше. Размер индекса растёт с числом
+    // ожидающих отправки, а не с общим числом смет.
+    index("estimates_pending_idx").on(t.createdAt).where(sql`notified_at is null`),
+  ],
 );
 
 /**
