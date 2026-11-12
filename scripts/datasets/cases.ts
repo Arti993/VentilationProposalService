@@ -40,6 +40,15 @@ export interface PriceExpectation {
   type: "price";
   /** Код позиции, которая должна быть найдена. null — позиции нет в прайсе. */
   code: string | null;
+  /**
+   * Требуется ли LLM для этого кейса.
+   *
+   * Ставится true там, где детерминированный матчер ПРАВИЛЬНО отказывается
+   * решать: например, «отвод 90 на 250» — вид не указан (сегментный или
+   * штампованный), и угадывать цену нельзя. Такие строки по замыслу уходят
+   * к модели. Без этой пометки CI считал бы корректный отказ поломкой.
+   */
+  needsLlm?: boolean;
 }
 
 export interface AgentExpectation {
@@ -85,8 +94,8 @@ export const PRICE_CASES: TestCase[] = [
     id: "price-elbow-250",
     kind: "price",
     input: "Отвод 90 градусов 250, 6 шт",
-    expect: { type: "price", code: "p065" },
-    note: "угол поворота не должен читаться как диаметр",
+    expect: { type: "price", code: "p065", needsLlm: true },
+    note: "вид отвода не указан (сегментный или штампованный) — решает LLM",
   },
   {
     id: "price-cap-315",
@@ -127,8 +136,8 @@ export const PRICE_CASES: TestCase[] = [
     id: "price-short-elbow",
     kind: "price",
     input: "отвод 90 на 250, 3 шт",
-    expect: { type: "price", code: "p065" },
-    note: "сокращённая запись без слова «градусов»",
+    expect: { type: "price", code: "p065", needsLlm: true },
+    note: "сокращённая запись без «градусов» и без вида отвода — решает LLM",
   },
   {
     id: "price-hyphen-reducer",
