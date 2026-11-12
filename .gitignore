@@ -39,14 +39,14 @@ Desktop.ini
 .vscode/
 *.swp
 
-# ��������� ��������
+# ��������� ��������
 .session-test-id
 
-# �������� ���������
+# �������� ���������
 kp-*.docx
 .downloads/
 
-# ��������� TypeScript
+# ��������� TypeScript
 tsconfig.tsbuildinfo
 
 # Вывод диагностических скриптов
@@ -54,3 +54,15 @@ tsconfig.tsbuildinfo
 !public/*.txt
 
 !examples/*.txt
+
+# n8n: база, настройки, ключи шифрования текущей машины
+.n8n-data/
+
+# Временная сборка нативного модуля sqlite3 (нужен только локально)
+.tmp-sqlite/
+
+# Кэш авторизации Vercel CLI
+.vercel-config/
+
+# Служебные файлы отладки
+*.log
