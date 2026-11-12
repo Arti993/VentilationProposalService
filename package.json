@@ -20,7 +20,14 @@
     "agent": "node --env-file=.env.local scripts/agent.ts",
     "test:parse": "node scripts/test-parse.ts",
     "test:injection": "node --env-file=.env.local scripts/injection-test.ts",
-    "test:injection-llm": "node --env-file=.env.local scripts/injection-llm.ts"
+    "test:injection-llm": "node --env-file=.env.local scripts/injection-llm.ts",
+    "check": "node scripts/datasets/check.ts",
+    "check:price": "node scripts/datasets/check.ts price",
+    "check:attack": "node scripts/datasets/check.ts attack",
+    "eval:dataset": "node --env-file=.env.local scripts/datasets/evaluate.ts",
+    "eval:upload": "node --env-file=.env.local scripts/datasets/upload.ts",
+    "eval:verify": "node --env-file=.env.local scripts/datasets/verify-eval.ts",
+    "ci": "npm run typecheck && npm run eval && npm run check"
   },
   "dependencies": {
     "@langchain/core": "^0.3.0",

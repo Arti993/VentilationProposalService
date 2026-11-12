@@ -63,7 +63,16 @@ async function main() {
     const payload = {
       inputs: { question: c.input },
       outputs: { expected: c.expect },
-      metadata: { case_id: c.id, kind: c.kind, note: c.note },
+      metadata: {
+        case_id: c.id,
+        kind: c.kind,
+        note: c.note,
+        // Пометка needsLlm уходит в метаданные: по ней в интерфейсе видно,
+        // какие кейсы детерминированный путь решает сам, а какие по
+        // замыслу отдаёт модели. Без этого «пропуск» в CI выглядит как
+        // недосмотр, а не как осознанное решение.
+        needs_llm: c.expect.type === "price" && c.expect.needsLlm === true,
+      },
     };
     const id = existing.get(c.id);
     if (id) toUpdate.push({ id, ...payload });
