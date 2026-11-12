@@ -25,6 +25,12 @@
 #
 # Секретов не требуется. Запуск на форке без доступа к секретам тоже
 # пройдёт.
+#
+# ВАЖНО про пути: workflow лежит в .github/workflows/ ВНУТРИ kp-service,
+# и это корень репозитория — папки kp-service внутри репозитория нет.
+# Поэтому весь файл использует пути от корня, без working-directory.
+# Первый прогон упал именно на этом: путь "kp-service/package-lock.json"
+# не существовал, и setup-node не смог настроить кэш.
 
 name: Проверка
 
@@ -55,20 +61,16 @@ jobs:
           # Это и позволяет гонять скрипты из scripts/ как есть.
           node-version: "24"
           cache: npm
-          cache-dependency-path: kp-service/package-lock.json
 
       - name: Установка зависимостей
-        working-directory: kp-service
         run: npm ci --ignore-scripts
 
       # --- Дешёвые проверки первыми, чтобы ошибка в типах падала сразу ---
 
       - name: Проверка типов
-        working-directory: kp-service
         run: npx tsc --noEmit
 
       - name: Нормализация прайса
-        working-directory: kp-service
         run: |
           node scripts/normalize-price.ts
           # Скрипт перезаписывает data/price.normalized.json. Если файл
@@ -81,15 +83,12 @@ jobs:
           fi
 
       - name: Эталонные сметы (eval)
-        working-directory: kp-service
         run: node scripts/eval.ts
 
       - name: Датасет кейсов
-        working-directory: kp-service
         run: node scripts/datasets/check.ts
 
       - name: Сборка
-        working-directory: kp-service
         run: npm run build
         env:
           # Сборке нужны переменные, но значения не важны: Next.js проверяет
