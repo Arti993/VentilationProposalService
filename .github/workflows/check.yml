@@ -1,0 +1,99 @@
+# Проверка на каждый пуш и пул-реквест.
+#
+# Задача: поймать регрессию ДО мержа. Красный крест на коммите значит
+# «эта правка сломала то, что работало», и это видно без запуска скриптов
+# вручную.
+#
+# Что гоняем и почему именно это:
+#
+#  1. Типы — самая дешёвая проверка, падает секунды.
+#  2. Нормализация прайса — все 215 строк должны разбираться. Если правка
+#     в разборе ломает хотя бы одну строку, цены по ней уже не будет.
+#  3. Детерминированный eval — 27 эталонных строк смет с точными ценами.
+#  4. Датасет из 25 кейсов — те же кейсы, что в LangSmith.
+#  5. Сборка Next.js — ловит проблемы, невидимые для tsc.
+#
+# Чего здесь НЕТ намеренно:
+#
+#  - Вызовов LLM. Они стоят денег и дают разный ответ от прогона к
+#    прогону, поэтому негодны как критерий «сломал/не сломал». Ответы
+#    агента живут в отдельном прогоне с LangSmith (scripts/datasets/
+#    evaluate.ts), который запускается вручную и смотрит человек.
+#  - Подключения к базе. Прайс для проверок берётся из репозитория
+#    (data/price.normalized.json). Neon в CI не нужен, и это хорошо:
+#    проверка не падает оттого, что база недоступна.
+#
+# Секретов не требуется. Запуск на форке без доступа к секретам тоже
+# пройдёт.
+
+name: Проверка
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Лишние прогоны на тот же коммит отменяем: при серии пушей важно
+# проверить последний, а не каждый промежуточный.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Типы, тесты, датасет
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24: в нём TypeScript запускается напрямую, без сборки.
+          # Это и позволяет гонять скрипты из scripts/ как есть.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: kp-service/package-lock.json
+
+      - name: Установка зависимостей
+        working-directory: kp-service
+        run: npm ci --ignore-scripts
+
+      # --- Дешёвые проверки первыми, чтобы ошибка в типах падала сразу ---
+
+      - name: Проверка типов
+        working-directory: kp-service
+        run: npx tsc --noEmit
+
+      - name: Нормализация прайса
+        working-directory: kp-service
+        run: |
+          node scripts/normalize-price.ts
+          # Скрипт перезаписывает data/price.normalized.json. Если файл
+          # в репозитории устарел или разбор изменился — это надо увидеть,
+          # а не потерять.
+          if ! git diff --quiet -- data/price.normalized.json; then
+            echo "::error::normalize-price.ts изменил data/price.normalized.json — закоммитьте результат"
+            git diff --stat -- data/price.normalized.json
+            exit 1
+          fi
+
+      - name: Эталонные сметы (eval)
+        working-directory: kp-service
+        run: node scripts/eval.ts
+
+      - name: Датасет кейсов
+        working-directory: kp-service
+        run: node scripts/datasets/check.ts
+
+      - name: Сборка
+        working-directory: kp-service
+        run: npm run build
+        env:
+          # Сборке нужны переменные, но значения не важны: Next.js проверяет
+          # их наличие при импорте модулей, а не подключается к сервисам.
+          POLZA_API_KEY: "ci-placeholder"
+          POLZA_BASE_URL: "https://polza.ai/api/v1"
+          DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
