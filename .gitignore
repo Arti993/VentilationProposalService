@@ -1,0 +1,71 @@
+# Зависимости
+node_modules/
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+
+# Кэш npm (нужен локальный путь из-за песочницы)
+.npm-cache/
+
+# Окружение: секреты не коммитим
+.env
+.env.local
+.env*.local
+!.env.example
+
+# Vercel
+.vercel
+
+# Логи и временные файлы
+*.log
+
+# Результаты CLI-прогонов и UI-проверок
+kp-*.csv
+*.tmp
+ui-*.png
+ui-dom.html
+session-id.txt
+
+# Файлы, которые могут содержать клиентские данные
+data/*.csv
+
+# ОС и редакторы
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ��������� ��������
+.session-test-id
+
+# �������� ���������
+kp-*.docx
+.downloads/
+
+# ��������� TypeScript
+tsconfig.tsbuildinfo
+
+# Вывод диагностических скриптов
+*.txt
+!public/*.txt
+
+!examples/*.txt
+
+# n8n: база, настройки, ключи шифрования текущей машины
+.n8n-data/
+
+# Временная сборка нативного модуля sqlite3 (нужен только локально)
+.tmp-sqlite/
+
+# Кэш авторизации Vercel CLI
+.vercel-config/
+
+# Служебные файлы отладки
+*.log
+
+# Скриншоты и профиль headless Chrome для проверок вёрстки
+.shots/
