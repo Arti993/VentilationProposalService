@@ -4,7 +4,14 @@ const STEPS = [
   {
     icon: UploadCloud,
     title: "Загрузите смету",
-    text: "Файл .txt или .csv — хоть таблица из Excel, хоть список строк от клиента в письме.",
+    text: "Excel, Word или CSV — в каком виде прислали, в таком и загружайте. Книга из нескольких листов, таблица в документе, список строк из письма: формат определяем сами.",
+    // Полный перечень под текстом: человек, который ищет «а моя смета
+    // подойдёт?», должен получить ответ сразу, не открывая приложение
+    formats: [
+      { label: "Excel", ext: ".xlsx .xlsm .xls" },
+      { label: "Word", ext: ".docx" },
+      { label: "Текст", ext: ".csv .tsv .txt" },
+    ],
   },
   {
     icon: ScanSearch,
@@ -67,6 +74,23 @@ export function HowItWorks() {
 
                 <h3 className="mt-5 text-base font-semibold text-slate-900">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">{s.text}</p>
+
+                {/* Форматы — только у первого шага: у остальных их нет,
+                    и список был бы шумом */}
+                {"formats" in s && s.formats && (
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {s.formats.map((f) => (
+                      <li
+                        key={f.label}
+                        className="rounded-md bg-slate-100 px-2 py-1 text-2xs leading-none text-slate-600"
+                        title={f.ext}
+                      >
+                        <span className="font-medium text-slate-700">{f.label}</span>
+                        <span className="ml-1 text-slate-500">{f.ext}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             );
           })}
