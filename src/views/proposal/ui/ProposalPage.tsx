@@ -12,7 +12,14 @@
  */
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileSpreadsheet, MessageSquare, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  FileText,
+  FileType2,
+  MessageSquare,
+  Plus,
+} from "lucide-react";
 import { UploadEstimate } from "@features/upload-estimate";
 import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
@@ -120,13 +127,28 @@ export function ProposalPage() {
             {/* Подсказка о формате — снимает вопрос до загрузки */}
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               {[
-                { h: "Из Excel", t: "Сохраните как CSV — разделители определим сами" },
-                { h: "Из письма", t: "Скопируйте список строк в текстовый файл" },
-                { h: "Демо-файлы", t: "Две готовые сметы — для быстрой проверки" },
+                {
+                  h: "Excel",
+                  t: "Любой лист книги, шапка может быть не сверху",
+                  icon: FileSpreadsheet,
+                },
+                {
+                  h: "Word",
+                  t: "Таблица из документа — количества сохранятся",
+                  icon: FileType2,
+                },
+                {
+                  h: "CSV или текст",
+                  t: "Разделители и кодировку определим сами",
+                  icon: FileText,
+                },
               ].map((x) => (
                 <div key={x.h} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-semibold text-slate-900">{x.h}</p>
-                  <p className="mt-1 text-2xs leading-relaxed text-slate-500">{x.t}</p>
+                  <div className="flex items-center gap-2">
+                    <x.icon className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+                    <p className="text-xs font-semibold text-slate-900">{x.h}</p>
+                  </div>
+                  <p className="mt-1.5 text-2xs leading-relaxed text-slate-500">{x.t}</p>
                 </div>
               ))}
             </div>
