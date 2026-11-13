@@ -209,6 +209,10 @@ export function ChatPanel({
           {suggestions.map((s) => (
             <button
               key={s}
+              // type="button" обязателен: подсказки стоят рядом с формой
+              // отправки, и без явного типа браузер считает их
+              // отправляющими — сабмит формы вместо вопроса
+              type="button"
               onClick={() => send(s)}
               className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs
                          text-slate-600 transition-all hover:border-accent-300

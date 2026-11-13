@@ -118,61 +118,69 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
-        }}
         className={cn(
-          "group relative flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl",
-          "border-2 border-dashed px-6 py-14 text-center transition-all duration-200",
+          "group relative flex flex-col items-center justify-center gap-3 rounded-2xl",
+          "border-2 border-dashed px-5 py-10 text-center transition-all duration-200 sm:gap-4 sm:px-6 sm:py-14",
           dragging
-            ? "border-accent-400 bg-accent-50/60 scale-[1.01]"
+            ? "border-accent-400 bg-accent-50/60"
             : "border-slate-200 bg-slate-50/50 hover:border-accent-300 hover:bg-accent-50/30",
         )}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPTED.join(",")}
-          className="hidden"
-          onChange={(e) => pick(e.target.files?.[0] ?? null)}
-        />
+        {/*
+          Настоящая кнопка, а не div с role="button": браузер сам даёт
+          ей фокус, отклик на Enter и пробел, и озвучивает как кнопку.
+          Раньше здесь был div с тремя обработчиками — работало, но
+          скринридер не понимал, что это элемент действия.
+        */}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full flex-col items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 sm:gap-4"
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED.join(",")}
+            className="sr-only"
+            tabIndex={-1}
+            onChange={(e) => pick(e.target.files?.[0] ?? null)}
+          />
 
-        {file ? (
-          <>
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <FileText className="h-6 w-6 text-accent-600" />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900">{file.name}</p>
-              <p className="mt-1 text-sm text-slate-500">
-                {formatLabel(file.name)} · {Math.round(file.size / 1024)} КБ ·
-                готов к обработке
-              </p>
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              className={cn(
-                "flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200",
-                "transition-transform duration-200 group-hover:scale-105",
-              )}
-            >
-              <UploadCloud className="h-6 w-6 text-accent-600" />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900">
-                Перетащите файл или нажмите для выбора
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Excel, Word, CSV или текст — до 5 МБ
-              </p>
-            </div>
-          </>
-        )}
+          {file ? (
+            <>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 sm:h-14 sm:w-14">
+                <FileText className="h-5 w-5 text-accent-600 sm:h-6 sm:w-6" aria-hidden />
+              </span>
+              <span className="min-w-0 max-w-full">
+                <span className="block break-all font-medium text-slate-900">
+                  {file.name}
+                </span>
+                <span className="mt-1 block text-xs text-slate-500 sm:text-sm">
+                  {formatLabel(file.name)} · {Math.round(file.size / 1024)} КБ
+                </span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 sm:h-14 sm:w-14",
+                  "transition-transform duration-200 group-hover:scale-105",
+                )}
+              >
+                <UploadCloud className="h-5 w-5 text-accent-600 sm:h-6 sm:w-6" aria-hidden />
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-slate-900 sm:text-base">
+                  Перетащите файл или нажмите для выбора
+                </span>
+                <span className="mt-1 block text-xs text-slate-500 sm:text-sm">
+                  Excel, Word, CSV или текст — до 5 МБ
+                </span>
+              </span>
+            </>
+          )}
+        </button>
       </div>
 
       {error && (
@@ -185,23 +193,28 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <button className="btn-primary flex-1" onClick={submit} disabled={!file || busy}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <button
+          className="btn-primary min-h-11 w-full sm:flex-1"
+          type="button"
+          onClick={submit}
+          disabled={!file || busy}
+        >
           {busy ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Обрабатываю…
             </>
           ) : (
             <>
               Обработать смету
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" aria-hidden />
             </>
           )}
         </button>
         {file && !busy && (
           <button
-            className="btn-ghost"
+            className="btn-ghost min-h-11"
             onClick={() => {
               setFile(null);
               setError(null);
@@ -214,20 +227,29 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
       </div>
 
       {/* Демо: пользователю не нужно искать файл, чтобы увидеть работу сервиса */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-4">
-        <span className="text-xs text-slate-500">Нет файла под рукой?</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-3">
+        <span className="py-2 text-xs text-slate-500">Нет файла под рукой?</span>
+        {/*
+          type="button" обязателен. Кнопки загрузки демо — не единственные
+          кнопки на этом экране, и без явного типа браузер считает их
+          отправляющими: внутри формы клик сабмитит её и обработчик
+          не вызывается вовсе. Симптом коварный — кнопка нажимается,
+          ничего не происходит, ошибок в консоли нет.
+        */}
         <button
-          className="text-xs font-medium text-accent-600 underline-offset-4 hover:text-accent-700 hover:underline disabled:opacity-40"
+          type="button"
+          className="min-h-9 px-1 text-xs font-medium text-accent-700 underline-offset-4 hover:underline disabled:opacity-40"
           onClick={() => loadDemo("office")}
           disabled={busy}
         >
           Офисная смета
         </button>
-        <span className="text-slate-200" aria-hidden>
+        <span className="text-slate-300" aria-hidden>
           ·
         </span>
         <button
-          className="text-xs font-medium text-accent-600 underline-offset-4 hover:text-accent-700 hover:underline disabled:opacity-40"
+          type="button"
+          className="min-h-9 px-1 text-xs font-medium text-accent-700 underline-offset-4 hover:underline disabled:opacity-40"
           onClick={() => loadDemo("warehouse")}
           disabled={busy}
         >

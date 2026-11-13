@@ -43,6 +43,7 @@ export function DownloadProposal({
   return (
     <div className={cn("flex flex-col items-start gap-1", className)}>
       <button
+        type="button"
         onClick={handle}
         disabled={disabled}
         className="btn-primary text-sm"
