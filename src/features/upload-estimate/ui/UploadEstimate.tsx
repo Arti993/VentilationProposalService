@@ -17,6 +17,30 @@ interface UploadEstimateProps {
   onLoaded: (session: EstimateSession & { id: string }) => void;
 }
 
+/**
+ * Форматы, которые принимаем.
+ *
+ * Список продублирован в атрибуте accept и в проверке — это не
+ * избыточность, а необходимость: accept только фильтрует диалог
+ * выбора файла, обойти его можно перетаскиванием.
+ */
+const ACCEPTED = [".txt", ".csv", ".tsv", ".xlsx", ".xlsm", ".xls", ".docx"];
+
+/** Подпись формата для показа пользователю. */
+function formatLabel(name: string): string {
+  const ext = name.toLowerCase().slice(name.lastIndexOf("."));
+  const map: Record<string, string> = {
+    ".xlsx": "Excel",
+    ".xlsm": "Excel (с макросами)",
+    ".xls": "Excel (старый формат)",
+    ".docx": "Word",
+    ".csv": "CSV",
+    ".tsv": "TSV",
+    ".txt": "Текст",
+  };
+  return map[ext] ?? ext;
+}
+
 export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -29,12 +53,17 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
     if (!f) return;
 
     const ext = f.name.toLowerCase().slice(f.name.lastIndexOf("."));
-    if (![".txt", ".csv", ".tsv"].includes(ext)) {
-      setError(`Формат «${ext || "без расширения"}» не поддерживается. Нужен .txt или .csv.`);
+    if (!ACCEPTED.includes(ext)) {
+      setError(
+        `Формат «${ext || "без расширения"}» не поддерживается. ` +
+          `Подойдёт Excel, Word или текстовый файл.`,
+      );
       return;
     }
-    if (f.size > 2 * 1024 * 1024) {
-      setError("Файл больше 2 МБ.");
+    // Бинарные форматы тяжелее текстовых — отдельный лимит не нужен,
+    // но пользователю полезно знать, что мы это учитываем
+    if (f.size > 5 * 1024 * 1024) {
+      setError(`Файл больше 5 МБ (${Math.round(f.size / 1024 / 1024)} МБ).`);
       return;
     }
     setFile(f);
@@ -106,7 +135,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
         <input
           ref={inputRef}
           type="file"
-          accept=".txt,.csv,.tsv"
+          accept={ACCEPTED.join(",")}
           className="hidden"
           onChange={(e) => pick(e.target.files?.[0] ?? null)}
         />
@@ -119,7 +148,8 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
             <div>
               <p className="font-medium text-slate-900">{file.name}</p>
               <p className="mt-1 text-sm text-slate-500">
-                {Math.round(file.size / 1024)} КБ · готов к обработке
+                {formatLabel(file.name)} · {Math.round(file.size / 1024)} КБ ·
+                готов к обработке
               </p>
             </div>
           </>
@@ -138,7 +168,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
                 Перетащите файл или нажмите для выбора
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                .txt, .csv, .tsv — до 2 МБ
+                Excel, Word, CSV или текст — до 5 МБ
               </p>
             </div>
           </>
