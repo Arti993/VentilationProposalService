@@ -21,7 +21,7 @@ interface ChatPanelProps {
   onInitialConsumed?: () => void;
 }
 
-/** Простейший рендер: абзацы + **жирный** + таблицы не разбираем. */
+/** Простейший рендер: абзацы + **жирный** + таблицы отдельным блоком. */
 function renderText(text: string) {
   const blocks = text.split(/\n{2,}/);
   return blocks.map((block, i) => {
@@ -32,7 +32,7 @@ function renderText(text: string) {
       return (
         <pre
           key={i}
-          className="my-2 overflow-x-auto rounded-lg bg-ink-50 p-3 text-xs leading-relaxed"
+          className="my-2 overflow-x-auto rounded-lg bg-slate-50 p-3 text-xs leading-relaxed ring-1 ring-slate-200"
         >
           {block}
         </pre>
@@ -121,15 +121,15 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-1 py-2">
+      <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto py-4 pr-1">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-            <div className="rounded-full bg-copper-50 p-3">
-              <Sparkles className="h-6 w-6 text-copper-600" />
+          <div className="flex flex-col items-center justify-center gap-4 px-2 py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-50 ring-1 ring-inset ring-accent-600/10">
+              <Sparkles className="h-5 w-5 text-accent-600" />
             </div>
             <div>
-              <p className="font-medium text-ink-900">Спросите про смету или прайс</p>
-              <p className="text-sm text-ink-500">
+              <p className="font-medium text-slate-900">Спросите про смету или прайс</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
                 Цены берутся только из прайса — выдумывать агент не умеет
               </p>
             </div>
@@ -140,66 +140,79 @@ export function ChatPanel({
           <div
             key={i}
             className={cn(
-              "flex gap-3 animate-slide-up",
+              "flex gap-2.5 animate-slide-up",
               m.role === "user" ? "flex-row-reverse" : "flex-row",
             )}
           >
             <div
               className={cn(
-                "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-                m.role === "user" ? "bg-ink-900 text-white" : "bg-copper-100 text-copper-700",
+                "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+                m.role === "user"
+                  ? "bg-slate-900 text-white"
+                  : "bg-accent-50 text-accent-600 ring-1 ring-inset ring-accent-600/10",
               )}
             >
               {m.role === "user" ? (
-                <User className="h-4 w-4" />
+                <User className="h-3.5 w-3.5" aria-hidden />
               ) : (
-                <Bot className="h-4 w-4" />
+                <Bot className="h-3.5 w-3.5" aria-hidden />
               )}
             </div>
 
             <div
               className={cn(
-                "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                "max-w-[86%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
                 m.role === "user"
-                  ? "bg-ink-900 text-white"
-                  : "border border-ink-200 bg-white text-ink-800",
+                  ? "rounded-tr-sm bg-slate-900 text-white"
+                  : "rounded-tl-sm border border-slate-200 bg-white text-slate-800 shadow-sm",
               )}
             >
               {renderText(m.text)}
               {m.ms !== undefined && (
-                <p className="mt-1.5 text-[11px] text-ink-400">{(m.ms / 1000).toFixed(1)} с</p>
+                <p
+                  className={cn(
+                    "mt-2 text-2xs",
+                    m.role === "user" ? "text-slate-400" : "text-slate-400",
+                  )}
+                >
+                  {(m.ms / 1000).toFixed(1)} с
+                </p>
               )}
             </div>
           </div>
         ))}
 
         {busy && (
-          <div className="flex gap-3">
-            <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-copper-100">
-              <Bot className="h-4 w-4 text-copper-700" />
+          <div className="flex gap-2.5">
+            <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-accent-50 ring-1 ring-inset ring-accent-600/10">
+              <Bot className="h-3.5 w-3.5 text-accent-600" aria-hidden />
             </div>
-            <div className="flex items-center gap-2 rounded-2xl border border-ink-200 bg-white px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-ink-400" />
-              <span className="text-sm text-ink-500">Думаю…</span>
+            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-500" />
+              <span className="text-sm text-slate-500">Думаю…</span>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-bad/20 bg-bad/5 px-3 py-2 text-sm text-bad">
+          <div
+            className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700"
+            role="alert"
+          >
             {error}
           </div>
         )}
       </div>
 
       {messages.length === 0 && suggestions.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-1.5">
           {suggestions.map((s) => (
             <button
               key={s}
               onClick={() => send(s)}
-              className="rounded-full border border-ink-200 bg-white px-3 py-1.5
-                         text-xs text-ink-600 transition-colors hover:border-ink-300 hover:bg-ink-50"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs
+                         text-slate-600 transition-all hover:border-accent-300
+                         hover:bg-accent-50/50 hover:text-accent-700"
             >
               {s}
             </button>
@@ -212,25 +225,18 @@ export function ChatPanel({
           e.preventDefault();
           send(input);
         }}
-        className="flex items-end gap-2 border-t border-ink-200 pt-3"
+        className="flex items-end gap-2 border-t border-slate-100 pt-3"
       >
-        <textarea
+        <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(input);
-            }
-          }}
           placeholder="Например: почему позиция 12 без цены?"
-          rows={1}
-          className="flex-1 resize-none rounded-lg border border-ink-200 bg-white px-3 py-2.5
-                     text-sm placeholder:text-ink-400 focus:border-ink-400"
+          className="field !rounded-xl !py-2.5 !text-sm"
+          aria-label="Вопрос ассистенту"
         />
         <button
           type="submit"
-          className="btn-primary aspect-square !px-3"
+          className="btn-primary !px-3 !py-2.5"
           disabled={!input.trim() || busy}
           aria-label="Отправить"
         >

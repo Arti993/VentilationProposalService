@@ -66,3 +66,6 @@ tsconfig.tsbuildinfo
 
 # Служебные файлы отладки
 *.log
+
+# Скриншоты и профиль headless Chrome для проверок вёрстки
+.shots/

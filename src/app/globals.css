@@ -4,64 +4,223 @@
 
 @layer base {
   :root {
-    --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", "Consolas", monospace;
+    --font-sans: "Inter", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+
+    /* Высота шапки: используется для sticky-отступов и якорей */
+    --header-h: 4rem;
   }
 
   html {
     @apply antialiased;
+    scroll-behavior: smooth;
+    /* Якорные ссылки не прячутся под липкой шапкой */
+    scroll-padding-top: calc(var(--header-h) + 1.5rem);
   }
 
   body {
-    @apply bg-ink-50 text-ink-900;
+    @apply bg-white text-slate-900;
+    /* Оптические настройки Inter: однозначные l/1, правильный 1, etc. */
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
   }
 
-  /* Единый focus-ring: доступность обязательна, а не «если успеем» */
+  /**
+   * Единый фокус. Синий, а не стандартный браузерный: он совпадает с
+   * акцентом и виден на белом, на сером и на тёмном.
+   */
   *:focus-visible {
-    @apply outline-none ring-2 ring-copper-500 ring-offset-2 ring-offset-ink-50;
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-white;
+  }
+
+  ::selection {
+    @apply bg-accent-100 text-accent-900;
   }
 
   /* Скроллбар в тон интерфейсу */
   ::-webkit-scrollbar {
-    @apply h-2 w-2;
+    @apply h-2.5 w-2.5;
   }
   ::-webkit-scrollbar-track {
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-ink-300;
+    @apply rounded-full bg-slate-300;
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-ink-400;
+    @apply bg-slate-400;
+    background-clip: content-box;
+  }
+
+  /**
+   * Уважение к настройке «меньше движения». Это не формальность:
+   * у людей с вестибулярными расстройствами анимация вызывает
+   * головокружение. Отключаем движение, но не отклик.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Табличные числа: цифры одной ширины, чтобы колонки не «плясали» */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer components {
+  /* ── Карточки ────────────────────────────────────────────── */
+
   .card {
-    @apply rounded-xl border border-ink-200 bg-white shadow-sm;
+    @apply rounded-2xl border border-slate-200/90 bg-white shadow-card;
   }
 
+  /* Карточка с подсветкой при наведении — для интерактивных блоков */
+  .card-hover {
+    @apply card transition-all duration-300 ease-out-expo
+           hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lift;
+  }
+
+  /* ── Кнопки ──────────────────────────────────────────────── */
+
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5
-           text-sm font-medium transition-colors disabled:cursor-not-allowed
-           disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-xl
+           px-5 py-2.5 text-sm font-medium transition-all duration-200
+           disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none;
   }
 
   .btn-primary {
-    @apply btn bg-ink-900 text-white hover:bg-ink-800 active:bg-ink-950;
+    @apply btn bg-accent-600 text-white shadow-sm
+           hover:bg-accent-700 hover:shadow-glow
+           active:scale-[0.985] active:bg-accent-800
+           disabled:hover:bg-accent-600 disabled:hover:shadow-sm;
   }
 
   .btn-secondary {
-    @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-50;
+    @apply btn border border-slate-200 bg-white text-slate-700 shadow-sm
+           hover:border-slate-300 hover:bg-slate-50 active:scale-[0.985];
   }
 
   .btn-ghost {
-    @apply btn text-ink-600 hover:bg-ink-100 hover:text-ink-900;
+    @apply btn text-slate-600 hover:bg-slate-100 hover:text-slate-900
+           active:scale-[0.985];
   }
 
+  .btn-lg {
+    @apply px-7 py-3.5 text-base;
+  }
+
+  /* Тёмная кнопка — на синем и на тёмном фоне */
+  .btn-inverse {
+    @apply btn bg-white text-slate-900 shadow-sm
+           hover:bg-slate-50 active:scale-[0.985];
+  }
+
+  /* ── Бейджи ──────────────────────────────────────────────── */
+
   .badge {
-    @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5
-           text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5
+           text-2xs font-medium;
+  }
+
+  /* ── Поля ввода ──────────────────────────────────────────── */
+
+  .field {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5
+           text-sm text-slate-900 placeholder:text-slate-400
+           transition-colors focus:border-accent-400;
+  }
+
+  /* ── Заголовки секций ────────────────────────────────────── */
+
+  /* Надзаголовок над h2: мелкая капитель с трекингом */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-accent-600;
+  }
+
+  /* ── Декоративные ────────────────────────────────────────── */
+
+  /**
+   * Сетка-подложка. Очень слабая: она должна читаться как текстура
+   * бумаги, а не как чертёж. 0.04 альфы — предел, после которого
+   * начинает мешать тексту.
+   */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .bg-grid-dark {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  /* Мягкое радиальное свечение — создаёт глубину без картинок */
+  .bg-glow {
+    background: radial-gradient(
+      60% 50% at 50% 0%,
+      rgba(37, 99, 235, 0.09) 0%,
+      rgba(37, 99, 235, 0.02) 45%,
+      transparent 70%
+    );
+  }
+
+  /* Маска: гасит сетку к краям, чтобы не было жёсткой рамки */
+  .mask-fade-edges {
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
+  }
+
+  /* Полоска-разделитель с растворением по краям */
+  .rule-fade {
+    @apply h-px w-full border-0;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(15, 23, 42, 0.10) 20%,
+      rgba(15, 23, 42, 0.10) 80%,
+      transparent
+    );
+  }
+
+  /* Стеклянная поверхность для липкой шапки */
+  .glass {
+    @apply border-b border-slate-200/70 bg-white/80 backdrop-blur-xl;
+  }
+}
+
+@layer utilities {
+  /* Многострочное обрезание */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /**
+   * Появление при скролле. Работает без JS-библиотек через
+   * animation-timeline, где поддерживается; в остальных браузерах
+   * просто показывается сразу — контент не пропадает.
+   */
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: slide-up linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 22%;
+    }
   }
 }

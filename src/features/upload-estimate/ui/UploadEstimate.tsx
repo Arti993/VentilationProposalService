@@ -8,7 +8,7 @@
  * клиентская проверка для удобства, а не для безопасности.
  */
 import { useCallback, useRef, useState, type DragEvent } from "react";
-import { UploadCloud, FileText, Loader2, X } from "lucide-react";
+import { UploadCloud, FileText, Loader2, X, ArrowRight } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { uploadEstimate } from "@shared/api/client";
 import type { EstimateSession } from "@entities/estimate/model/types";
@@ -81,7 +81,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -96,11 +96,11 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
           if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
         }}
         className={cn(
-          "group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl",
-          "border-2 border-dashed px-6 py-10 text-center transition-colors",
+          "group relative flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl",
+          "border-2 border-dashed px-6 py-14 text-center transition-all duration-200",
           dragging
-            ? "border-copper-500 bg-copper-50"
-            : "border-ink-200 bg-white hover:border-ink-300 hover:bg-ink-50",
+            ? "border-accent-400 bg-accent-50/60 scale-[1.01]"
+            : "border-slate-200 bg-slate-50/50 hover:border-accent-300 hover:bg-accent-50/30",
         )}
       >
         <input
@@ -113,28 +113,44 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
 
         {file ? (
           <>
-            <FileText className="h-8 w-8 text-ink-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              <FileText className="h-6 w-6 text-accent-600" />
+            </div>
             <div>
-              <p className="font-medium text-ink-900">{file.name}</p>
-              <p className="text-sm text-ink-500">{Math.round(file.size / 1024)} КБ</p>
+              <p className="font-medium text-slate-900">{file.name}</p>
+              <p className="mt-1 text-sm text-slate-500">
+                {Math.round(file.size / 1024)} КБ · готов к обработке
+              </p>
             </div>
           </>
         ) : (
           <>
-            <UploadCloud className="h-8 w-8 text-ink-400 transition-colors group-hover:text-ink-600" />
+            <div
+              className={cn(
+                "flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200",
+                "transition-transform duration-200 group-hover:scale-105",
+              )}
+            >
+              <UploadCloud className="h-6 w-6 text-accent-600" />
+            </div>
             <div>
-              <p className="font-medium text-ink-900">
-                Перетащите смету или нажмите для выбора
+              <p className="font-medium text-slate-900">
+                Перетащите файл или нажмите для выбора
               </p>
-              <p className="text-sm text-ink-500">.txt, .csv — до 2 МБ</p>
+              <p className="mt-1 text-sm text-slate-500">
+                .txt, .csv, .tsv — до 2 МБ
+              </p>
             </div>
           </>
         )}
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-bad/20 bg-bad/5 px-3 py-2 text-sm text-bad">
-          <X className="mt-0.5 h-4 w-4 shrink-0" />
+        <div
+          className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-700"
+          role="alert"
+        >
+          <X className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{error}</span>
         </div>
       )}
@@ -147,7 +163,10 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
               Обрабатываю…
             </>
           ) : (
-            "Обработать смету"
+            <>
+              Обработать смету
+              <ArrowRight className="h-4 w-4" />
+            </>
           )}
         </button>
         {file && !busy && (
@@ -165,18 +184,20 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
       </div>
 
       {/* Демо: пользователю не нужно искать файл, чтобы увидеть работу сервиса */}
-      <div className="flex items-center gap-2 border-t border-ink-100 pt-3">
-        <span className="text-xs text-ink-400">Нет файла под рукой?</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-4">
+        <span className="text-xs text-slate-500">Нет файла под рукой?</span>
         <button
-          className="text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline disabled:opacity-40"
+          className="text-xs font-medium text-accent-600 underline-offset-4 hover:text-accent-700 hover:underline disabled:opacity-40"
           onClick={() => loadDemo("office")}
           disabled={busy}
         >
           Офисная смета
         </button>
-        <span className="text-ink-200">·</span>
+        <span className="text-slate-200" aria-hidden>
+          ·
+        </span>
         <button
-          className="text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline disabled:opacity-40"
+          className="text-xs font-medium text-accent-600 underline-offset-4 hover:text-accent-700 hover:underline disabled:opacity-40"
           onClick={() => loadDemo("warehouse")}
           disabled={busy}
         >

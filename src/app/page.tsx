@@ -1,9 +1,12 @@
-import { ProposalPage } from "@views/proposal";
+import { LandingPage } from "@views/landing";
 
 /**
- * Точка входа. app-слой только связывает страницу с роутом:
- * никакой логики здесь нет.
+ * Главная страница.
+ *
+ * app-слой только связывает роут с view: никакой логики здесь нет.
+ * Так роут остаётся тонким, а страницу можно переиспользовать в
+ * другом окружении — например, в сторибуке или при A/B-тесте.
  */
 export default function Page() {
-  return <ProposalPage />;
+  return <LandingPage />;
 }
