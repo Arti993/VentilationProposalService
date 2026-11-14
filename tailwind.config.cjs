@@ -91,39 +91,19 @@ module.exports = {
         lift: "0 2px 4px rgba(15,23,42,0.05), 0 12px 24px -8px rgba(15,23,42,0.10), 0 32px 64px -24px rgba(15,23,42,0.14)",
         glow: "0 0 0 1px rgba(37,99,235,0.10), 0 8px 24px -8px rgba(37,99,235,0.28)",
       },
+      /**
+       * Анимации. Только те, что реально применяются: получить эффект,
+       * который нигде не виден, легко, а заметить его случайное влияние
+       * на другие элементы — нет.
+       */
       animation: {
-        "fade-in": "fade-in 0.4s ease-out",
         "slide-up": "slide-up 0.45s cubic-bezier(0.22,1,0.36,1)",
         "slide-up-slow": "slide-up 0.7s cubic-bezier(0.22,1,0.36,1)",
-        "pulse-soft": "pulse-soft 2.4s ease-in-out infinite",
-        float: "float 7s ease-in-out infinite",
-        "grow-x": "grow-x 1s cubic-bezier(0.22,1,0.36,1) forwards",
-        shimmer: "shimmer 2.2s linear infinite",
       },
       keyframes: {
-        "fade-in": {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
-        },
         "slide-up": {
           from: { opacity: "0", transform: "translateY(14px)" },
           to: { opacity: "1", transform: "translateY(0)" },
-        },
-        "pulse-soft": {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.45" },
-        },
-        float: {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
-        "grow-x": {
-          from: { width: "0%" },
-          to: { width: "var(--grow-to, 100%)" },
-        },
-        shimmer: {
-          from: { backgroundPosition: "200% 0" },
-          to: { backgroundPosition: "-200% 0" },
         },
       },
       /**

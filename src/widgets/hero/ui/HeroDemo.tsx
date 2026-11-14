@@ -91,10 +91,10 @@ export function HeroDemo() {
         aria-hidden
       />
 
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-lift">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift sm:rounded-3xl">
         {/* Панель окна */}
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-2">
             <FileCheck2 className="h-4 w-4 shrink-0 text-accent-600" />
             <span className="truncate text-xs font-medium text-slate-700">
               смета-от-клиента.txt
@@ -117,23 +117,23 @@ export function HeroDemo() {
           {ROWS.slice(0, shown).map((r, i) => (
             <div
               key={r.name}
-              className="flex items-center gap-3 px-4 py-3 animate-slide-up"
+              className="flex items-center gap-2.5 px-3 py-2.5 animate-slide-up sm:gap-3 sm:px-4 sm:py-3"
               style={{ animationDuration: "280ms" }}
             >
-              <span className="w-4 shrink-0 text-2xs tabular text-slate-300">{i + 1}</span>
+              <span className="hidden w-4 shrink-0 text-2xs tabular text-slate-300 sm:block">
+                {i + 1}
+              </span>
 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-medium text-slate-800">{r.name}</p>
-                {r.matched ? (
-                  <p className="truncate text-2xs text-slate-500">в прайсе: {r.matched}</p>
-                ) : (
-                  <p className="truncate text-2xs text-slate-500">{r.qty}</p>
-                )}
+                <p className="truncate text-2xs text-slate-500">
+                  {r.matched ? `в прайсе: ${r.matched}` : r.qty}
+                </p>
               </div>
 
               <span
                 className={cn(
-                  "badge hidden shrink-0 whitespace-nowrap sm:inline-flex",
+                  "badge hidden shrink-0 whitespace-nowrap lg:inline-flex",
                   STATUS_STYLE[r.status],
                 )}
               >
@@ -142,7 +142,7 @@ export function HeroDemo() {
 
               <span
                 className={cn(
-                  "w-20 shrink-0 text-right text-[13px] tabular",
+                  "w-16 shrink-0 text-right text-[13px] tabular sm:w-20",
                   r.price !== null ? "font-medium text-slate-900" : "text-slate-300",
                 )}
               >
@@ -152,9 +152,13 @@ export function HeroDemo() {
           ))}
 
           {!done && (
-            <div className="flex items-center gap-2 px-4 py-3 text-slate-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span className="text-2xs">Сопоставляю с прайсом…</span>
+            // Серая заглушка строки без текста: подпись «Сопоставляю с
+            // прайсом…» дублировала то же самое, что написано в
+            // заголовке карточки («Обработка…»), и набиралась цветом,
+            // который не проходит по контрасту
+            <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" aria-hidden />
+              <span className="h-2.5 w-40 animate-pulse rounded-full bg-slate-100" />
             </div>
           )}
         </div>
@@ -162,30 +166,20 @@ export function HeroDemo() {
         {/* Итог */}
         <div
           className={cn(
-            "flex items-center justify-between border-t border-slate-200 bg-slate-50/70 px-4 py-3.5 transition-opacity duration-500",
+            "flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/70 px-3 py-3 transition-opacity duration-500 sm:px-4 sm:py-3.5",
             done ? "opacity-100" : "opacity-0",
           )}
         >
-          <div>
+          <div className="min-w-0">
             <p className="text-2xs text-slate-500">Итог по КП</p>
-            <p className="text-lg font-semibold tracking-tight tabular text-slate-900">
+            <p className="truncate text-base font-semibold tracking-tight tabular text-slate-900 sm:text-lg">
               {formatMoney(total)}
             </p>
           </div>
-          <p className="max-w-[10rem] text-right text-2xs leading-relaxed text-slate-500">
+          <p className="max-w-[9rem] shrink-0 text-right text-2xs leading-relaxed text-slate-500 sm:max-w-[10rem]">
             Две позиции без цены — уточнит менеджер
           </p>
         </div>
-      </div>
-
-      {/* Ярлык поверх карточки: подчёркивает ключевое свойство */}
-      <div
-        className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full
-                   border border-slate-200 bg-white px-3.5 py-1.5 text-2xs font-medium
-                   text-slate-600 shadow-card sm:left-auto sm:right-6 sm:translate-x-0"
-      >
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" />
-        Ни одной выдуманной цены
       </div>
     </div>
   );

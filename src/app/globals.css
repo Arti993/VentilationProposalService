@@ -183,38 +183,16 @@
   .mask-fade-edges {
     mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
   }
-
-  /* Полоска-разделитель с растворением по краям */
-  .rule-fade {
-    @apply h-px w-full border-0;
-    background: linear-gradient(
-      to right,
-      transparent,
-      rgba(15, 23, 42, 0.10) 20%,
-      rgba(15, 23, 42, 0.10) 80%,
-      transparent
-    );
-  }
-
-  /* Стеклянная поверхность для липкой шапки */
-  .glass {
-    @apply border-b border-slate-200/70 bg-white/80 backdrop-blur-xl;
-  }
 }
 
 @layer utilities {
-  /* Многострочное обрезание */
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
   /**
    * Появление при скролле. Работает без JS-библиотек через
    * animation-timeline, где поддерживается; в остальных браузерах
    * просто показывается сразу — контент не пропадает.
+   *
+   * line-clamp-2 здесь больше не объявлен: Tailwind 3.3+ даёт его
+   * из коробки, а своя копия молча перекрывала встроенную.
    */
   @supports (animation-timeline: view()) {
     .reveal {
