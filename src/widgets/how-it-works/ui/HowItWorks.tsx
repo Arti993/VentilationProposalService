@@ -82,8 +82,13 @@ export function HowItWorks() {
                     {s.formats.map((f) => (
                       <li
                         key={f.label}
-                        className="rounded-md bg-slate-100 px-2 py-1 text-2xs leading-none text-slate-600"
-                        title={f.ext}
+                        // Расширения показаны прямо здесь, а не в
+                        // title-подсказке: на телефоне подсказки по
+                        // наведению не существует вовсе, а на десктопе
+                        // её находят единицы — человек, который ищет
+                        // «подойдёт ли мой файл», должен увидеть ответ
+                        // сразу
+                        className="rounded-md bg-slate-100 px-2 py-1 text-2xs leading-relaxed text-slate-600"
                       >
                         <span className="font-medium text-slate-700">{f.label}</span>
                         <span className="ml-1 text-slate-500">{f.ext}</span>

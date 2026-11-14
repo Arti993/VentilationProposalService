@@ -22,6 +22,13 @@ const NAV = [
  *
  * Порог 12px, а не 1px: при 1px шапка «дрожит» на тачпаде, потому что
  * событие скролла приходит рывками.
+ *
+ * МОБИЛЬНАЯ ВЕРСИЯ
+ *
+ * До 640px в шапке остаётся только знак без названия: две строки текста
+ * плюс кнопка меню на 360px не влезают, а обрезанное «Вентиляционн…»
+ * выглядит хуже, чем просто знак. Название целиком живёт в меню, где
+ * места достаточно, и в заголовке вкладки.
  */
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -42,6 +49,17 @@ export function SiteHeader() {
     };
   }, [open]);
 
+  // Escape закрывает меню: открыв его кнопкой, мышью уйти некуда,
+  // если не найти крестик
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <header
       className={cn(
@@ -51,9 +69,15 @@ export function SiteHeader() {
           : "border-b border-transparent bg-transparent",
       )}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
-        <Link href="/" aria-label="На главную" className="shrink-0">
-          <Logo />
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-5 lg:px-8">
+        <Link href="/" aria-label="На главную" className="min-w-0 shrink">
+          {/* На узком экране — только знак: см. комментарий выше */}
+          <span className="sm:hidden">
+            <Logo withWordmark={false} />
+          </span>
+          <span className="hidden sm:block">
+            <Logo />
+          </span>
         </Link>
 
         {/* Навигация на десктопе */}
@@ -70,17 +94,19 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Link href="/app" className="btn-primary hidden sm:inline-flex">
             Попробовать
             <ArrowRight className="h-4 w-4" />
           </Link>
 
           <button
+            type="button"
             className="btn-ghost -mr-2 !px-2.5 md:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Закрыть меню" : "Открыть меню"}
             aria-expanded={open}
+            aria-controls="mobile-nav"
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -89,19 +115,33 @@ export function SiteHeader() {
 
       {/* Мобильное меню */}
       {open && (
-        <div className="border-t border-slate-200 bg-white px-5 py-4 md:hidden">
+        <div
+          id="mobile-nav"
+          className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-4 sm:px-5 md:hidden"
+        >
+          {/* Название целиком: в шапке на телефоне его нет */}
+          <div className="mb-3 border-b border-slate-100 pb-3 sm:hidden">
+            <Logo />
+          </div>
+
           <nav className="flex flex-col">
             {NAV.map((n) => (
               <a
                 key={n.href}
                 href={n.href}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                // Высота 48px: по этому меню жмут пальцем, и промах
+                // раздражает сильнее, чем экономия восьми пикселей
+                className="flex min-h-12 items-center rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 {n.label}
               </a>
             ))}
-            <Link href="/app" className="btn-primary mt-3 w-full">
+            <Link
+              href="/app"
+              onClick={() => setOpen(false)}
+              className="btn-primary mt-3 min-h-12 w-full"
+            >
               Попробовать
               <ArrowRight className="h-4 w-4" />
             </Link>

@@ -31,8 +31,19 @@ const FILTERS: Array<{ key: Filter; label: string; test: (s: PositionStatus) => 
  * вынесены наверх: фильтр по проблемным строкам, сортировка по сумме
  * (дорогое — первым) и поиск по названию. Всё остальное — украшение.
  *
- * Поиск добавлен не для красоты: в смете на 50 позиций найти конкретную
- * строку глазами дольше, чем набрать три буквы.
+ * ДВЕ ВЁРСТКИ, НЕ ОДНА
+ *
+ * До 640px — карточки, от 640px — таблица.
+ *
+ * Соблазн был оставить одну таблицу с горизонтальной прокруткой: кода
+ * меньше, и на десктопе всё выглядит одинаково. На телефоне это работает
+ * плохо: чтобы увидеть сумму — а менеджер смотрит в первую очередь на
+ * неё, — нужно прокрутить таблицу вбок и потерять из виду название
+ * позиции. Сравнивать строки при этом невозможно: цена одной и название
+ * другой оказываются в кадре одновременно.
+ *
+ * Карточка держит название, количество, статус и сумму в одном блоке.
+ * Данные те же, меняется только раскладка.
  */
 export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -70,7 +81,7 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
       p.matchedName ?? "",
     ]);
 
-    // Точка с запятой и BOM: Excel в русской локали не иначе
+    // Точка с запятой и BOM: Excel в русской локали иначе не открывает
     const csv =
       "\uFEFF" +
       [header, ...rows]
@@ -97,9 +108,10 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
             return (
               <button
                 key={f.key}
+                type="button"
                 onClick={() => setFilter(f.key)}
                 className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                  "rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all sm:px-3 sm:text-sm",
                   active
                     ? "bg-slate-900 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100",
@@ -135,27 +147,77 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
           </div>
 
           <button
+            type="button"
             onClick={() => setSortBySum((v) => !v)}
             className={cn(
               "btn-ghost !px-2.5 !py-1.5 !text-xs",
               sortBySum && "bg-slate-100 text-slate-900",
             )}
-            title="Сортировать по сумме"
             aria-pressed={sortBySum}
           >
             <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden sm:inline">По сумме</span>
           </button>
 
-          <button onClick={exportCsv} className="btn-ghost !px-2.5 !py-1.5 !text-xs">
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="btn-ghost !px-2.5 !py-1.5 !text-xs"
+          >
             <Download className="h-3.5 w-3.5" aria-hidden />
             <span className="hidden sm:inline">CSV</span>
           </button>
         </div>
       </div>
 
-      {/* На узких экранах таблица скроллится внутри себя, а не распирает страницу */}
-      <div className="w-full overflow-x-auto">
+      {/* ── Карточки: телефоны ───────────────────────────── */}
+      <ul className="divide-y divide-slate-100 sm:hidden">
+        {visible.map((p) => (
+          <li key={p.posNo}>
+            <button
+              type="button"
+              onClick={() => onSelect?.(p)}
+              className="w-full px-3 py-3 text-left transition-colors hover:bg-accent-50/40"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-slate-900">
+                  <span className="mr-1.5 tabular text-slate-400">{p.posNo}.</span>
+                  {p.name}
+                </p>
+                <StatusBadge status={p.status} withDot={false} />
+              </div>
+
+              <div className="mt-2 flex items-baseline justify-between gap-2">
+                <p className="text-2xs text-slate-500">
+                  {formatNumber(p.qty)}
+                  {p.unit ? ` ${p.unit}` : ""}
+                  {p.unitPrice != null && ` × ${formatMoney(p.unitPrice)}`}
+                </p>
+                <p
+                  className={cn(
+                    "shrink-0 text-sm font-medium tabular",
+                    p.total != null ? "text-slate-900" : "text-slate-400",
+                  )}
+                >
+                  {p.total != null ? formatMoney(p.total) : "без цены"}
+                </p>
+              </div>
+
+              {p.matchedName && p.status === "priced" && (
+                <p className="mt-1 truncate text-2xs text-slate-500">
+                  в прайсе: {p.matchedName}
+                </p>
+              )}
+              {p.reason && (
+                <p className="mt-1 text-2xs leading-relaxed text-slate-500">{p.reason}</p>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {/* ── Таблица: от 640px ────────────────────────────── */}
+      <div className="hidden w-full overflow-x-auto sm:block">
         <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/60 text-left">
@@ -201,20 +263,20 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
                       {p.name}
                     </span>
                     {p.reason && (
-                      <span title={p.reason} className="text-slate-300 hover:text-slate-500">
+                      <span title={p.reason} className="text-slate-400">
                         <Info className="h-3.5 w-3.5" aria-hidden />
                       </span>
                     )}
                   </div>
                   {p.matchedName && p.status === "priced" && (
-                    <p className="mt-0.5 truncate text-2xs text-slate-400">
+                    <p className="mt-0.5 truncate text-2xs text-slate-500">
                       в прайсе: {p.matchedName}
                     </p>
                   )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-3 text-right tabular text-slate-700">
                   {formatNumber(p.qty)}
-                  {p.unit && <span className="ml-1 text-2xs text-slate-400">{p.unit}</span>}
+                  {p.unit && <span className="ml-1 text-2xs text-slate-500">{p.unit}</span>}
                 </td>
                 <td className="px-3 py-3">
                   <StatusBadge status={p.status} withDot={false} />
@@ -229,16 +291,16 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
             ))}
           </tbody>
         </table>
-
-        {visible.length === 0 && (
-          <div className="px-4 py-14 text-center">
-            <p className="text-sm font-medium text-slate-700">Ничего не найдено</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {query ? `По запросу «${query}»` : "С таким фильтром"} позиций нет
-            </p>
-          </div>
-        )}
       </div>
+
+      {visible.length === 0 && (
+        <div className="px-4 py-12 text-center sm:py-14">
+          <p className="text-sm font-medium text-slate-700">Ничего не найдено</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {query ? `По запросу «${query}»` : "С таким фильтром"} позиций нет
+          </p>
+        </div>
+      )}
     </div>
   );
 }
