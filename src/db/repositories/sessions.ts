@@ -14,14 +14,24 @@
  * не пройдёт проверку количества и сессия не считается валидной.
  */
 import { withRetry } from "../connection.ts";
+import { isDemoOrg } from "../../lib/auth/org.ts";
 import type {
   EstimateSession,
   EstimatePosition,
   PositionStatus,
 } from "../../entities/estimate/model/types.ts";
 
-/** Время жизни сессии: 24 часа. */
+/** Время жизни анонимной сессии: 24 часа. */
 const TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Время жизни сметы организации: год.
+ *
+ * Дольше, чем у анонима, и это осознанно: «моя работа пропала за ночь» —
+ * не то, чего ждут от личного кабинета. Год, а не «вечно»: хранить чужие
+ * коммерческие данные бессрочно — ответственность, а не удобство.
+ */
+const ORG_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 function num(v: string | null): number | undefined {
   if (v === null) return undefined;
@@ -40,6 +50,7 @@ interface HeadRow {
   off_topic_count: number;
   created_at: Date;
   expires_at: Date;
+  org_id: string | null;
 }
 
 interface PositionRow {
@@ -57,24 +68,45 @@ interface PositionRow {
   confidence: string | null;
 }
 
-/** Сохраняет сессию: шапка и позиции двумя запросами. */
+/** Владелец сохраняемой сметы. */
+export interface SessionOwner {
+  /** Организация — владелец данных */
+  orgId: string;
+  /** Пользователь, если он вошёл. NULL у анонимных. */
+  userId?: string | null;
+}
+
+/**
+ * Сохраняет сессию: шапка и позиции двумя запросами.
+ *
+ * `owner` обязателен. Разница между «не передали владельца» и «передали
+ * демо-организацию» — это разница между потерей данных и нормальной
+ * работой, поэтому параметр не имеет значения по умолчанию: забыть его
+ * должно быть нельзя, а не «тихо получится демо».
+ */
 export async function saveSession(
   id: string,
   session: EstimateSession,
+  owner: SessionOwner,
 ): Promise<void> {
-  const expiresAt = new Date(Date.now() + TTL_MS);
+  // Срок зависит от владельца: демо-данные убираем быстро, данные
+  // организации живут, пока владелец их не удалит.
+  const ttl = isDemoOrg(owner.orgId) ? TTL_MS : ORG_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttl);
 
   await withRetry(
     async (sql) => {
       await sql`
         insert into estimates (
           id, name, total_sum, total_count, priced_count,
-          not_found_count, needs_human_count, off_topic_count, expires_at
+          not_found_count, needs_human_count, off_topic_count, expires_at,
+          org_id, created_by
         ) values (
           ${id}, ${session.name}, ${String(session.stats.totalSum)},
           ${session.stats.total}, ${session.stats.priced},
           ${session.stats.notFound}, ${session.stats.needsHuman},
-          ${session.stats.offTopic}, ${expiresAt}
+          ${session.stats.offTopic}, ${expiresAt},
+          ${owner.orgId}, ${owner.userId ?? null}
         )
       `;
     },
@@ -128,14 +160,32 @@ export async function saveSession(
   }
 }
 
-/** Читает сессию по id. Возвращает null, если нет или истекла. */
-export async function getSession(id: string): Promise<EstimateSession | null> {
+/**
+ * Читает сессию по id. Возвращает null, если нет, истекла или не
+ * принадлежит указанной организации.
+ *
+ * ПРО ПОСЛЕДНИЙ СЛУЧАЙ
+ *
+ * id сметы — UUID, угадать его нельзя. Но «нельзя угадать» — не то же
+ * самое, что «нельзя узнать»: id попадает в адрес страницы, в историю
+ * браузера, в лог прокси, в ссылку, которой поделились. Поэтому при
+ * известном `orgId` доступ проверяется явно, а не полагается на
+ * секретность идентификатора.
+ *
+ * Возвращает null, а не «отказ»: для вызывающего кода чужой сметы не
+ * существует. Разный ответ на «есть, но чужая» и «нет такой» сам по
+ * себе утечка — по нему перебирают существующие id.
+ */
+export async function getSession(
+  id: string,
+  orgId?: string,
+): Promise<EstimateSession | null> {
   const head = await withRetry(
     async (sql) => {
       const rows = await sql<HeadRow[]>`
         select id, name, total_sum, total_count, priced_count,
                not_found_count, needs_human_count, off_topic_count,
-               created_at, expires_at
+               created_at, expires_at, org_id
           from estimates where id = ${id} limit 1
       `;
       return rows[0];
@@ -144,6 +194,15 @@ export async function getSession(id: string): Promise<EstimateSession | null> {
   );
 
   if (!head) return null;
+
+  if (orgId !== undefined && head.org_id !== orgId) {
+    // Не логируем id целиком: этого достаточно, чтобы сопоставить
+    // попытки, и недостаточно, чтобы восстановить ссылку из лога.
+    console.warn(
+      `[sessions] отказ в доступе к смете ${id.slice(0, 8)}… из чужой организации`,
+    );
+    return null;
+  }
 
   if (head.expires_at.getTime() < Date.now()) {
     await withRetry(

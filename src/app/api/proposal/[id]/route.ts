@@ -4,10 +4,19 @@
  * Сессия берётся из БД по id. Клиент не может подставить свои позиции
  * или цены: документ собирается только из того, что сохранено на сервере.
  *
+ * ПРОВЕРКА ВЛАДЕЛЬЦА
+ *
+ * КП — это коммерческие данные: цены, скидки, состав работ. Скачать его
+ * по одному id, не сверяя организацию, значило бы «кто узнал ссылку, тот
+ * и забрал документ». Поэтому владелец проверяется на сервере, а при
+ * несовпадении отвечаем 404 — не 403: разный ответ на «есть, но чужой»
+ * и «нет такого» сам по себе позволяет перебирать существующие id.
+ *
  * Ответ — файл, а не JSON: браузер скачает его напрямую.
  */
 import { NextResponse } from "next/server";
 import { getSession } from "../../_lib/sessionStore";
+import { getActor, viewerOrganization } from "@/lib/auth/guard";
 import { buildProposalDocx, proposalFileName } from "@/lib/proposal/docx";
 
 export const runtime = "nodejs";
@@ -28,7 +37,16 @@ export async function GET(
   }
 
   try {
-    const session = await getSession(id);
+    // Вошедший пользователь видит сметы своей организации, аноним —
+    // только демо-организации. Иначе анонимный посетитель мог бы
+    // угадать ссылку и забрать чужой КП.
+    //
+    // `viewerOrganization`, а не `actor?.orgId || DEMO_ORG_ID`: через `||`
+    // пустой orgId (пользователь без организации) превращался в демо-
+    // прайс, и все видели общие сметы.
+    const viewerOrg = viewerOrganization(await getActor());
+
+    const session = await getSession(id, viewerOrg);
 
     if (!session) {
       return NextResponse.json(

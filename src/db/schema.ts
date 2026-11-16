@@ -85,10 +85,21 @@ export const priceItems = pgTable(
     /** Когда посчитан эмбеддинг — чтобы находить устаревшие */
     embeddedAt: timestamp("embedded_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+
+    /**
+     * Чей это прайс.
+     *
+     * Сейчас у всех одна организация `org_demo` с тем самым прайсом на
+     * 215 позиций. Загрузка своего прайса в кабинете привяжет новые
+     * позиции к организации пользователя, и поиск будет идти только по
+     * ним: иначе чужой прайс подмешивался бы в ответы.
+     */
+    orgId: text("org_id"),
   },
   (t) => [
     uniqueIndex("price_items_code_uq").on(t.code),
     index("price_items_type_dims_idx").on(t.type, t.dimsKey),
+    index("price_items_org_idx").on(t.orgId),
   ],
 );
 
@@ -126,6 +137,24 @@ export const estimates = pgTable(
      * 15 минут. null — ещё не отдавали.
      */
     notifiedAt: timestamp("notified_at", { withTimezone: true }),
+
+    /**
+     * Владелец данных — организация, а не пользователь.
+     *
+     * Почему организация: «компания с тремя менеджерами» на такой схеме
+     * добавляется без миграции данных. Выбранная в интерфейсе
+     * организация — это контекст; право на конкретную смету проверяется
+     * на сервере по этой колонке при каждом запросе.
+     *
+     * NULL допустим только для строк, созданных до появления аккаунтов:
+     * они принадлежат демо-организации, но старый код мог писать без
+     * владельца. Отдельная миграция поставит NOT NULL, когда весь код
+     * будет проставлять владельца.
+     */
+    orgId: text("org_id"),
+
+    /** Кто именно загрузил. NULL у анонимных и у старых строк. */
+    createdBy: text("created_by"),
   },
   (t) => [
     index("estimates_expires_idx").on(t.expiresAt),
@@ -133,6 +162,9 @@ export const estimates = pgTable(
     // со временем становится всё меньше. Размер индекса растёт с числом
     // ожидающих отправки, а не с общим числом смет.
     index("estimates_pending_idx").on(t.createdAt).where(sql`notified_at is null`),
+    // Главный запрос личного кабинета: «сметы этой организации, свежие
+    // первыми». Без индекса на тысяче смет это последовательное чтение.
+    index("estimates_org_idx").on(t.orgId, t.createdAt),
   ],
 );
 

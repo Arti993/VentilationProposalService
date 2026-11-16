@@ -20,6 +20,7 @@
  * модели свою реплику.
  */
 import { withRetry } from "../connection.ts";
+import { DEMO_ORG_ID } from "../../lib/auth/org.ts";
 
 export type ChatRole = "user" | "assistant";
 
@@ -122,6 +123,61 @@ export async function countMessages(conversationId: string): Promise<number> {
     return Number(rows[0]?.n ?? 0);
   } catch {
     return 0;
+  }
+}
+
+/**
+ * Можно ли читать этот диалог из указанной организации.
+ *
+ * ЛОГИКА
+ *
+ *  1. Диалог, привязанный к смете, доступен, только если смета
+ *     принадлежит этой организации.
+ *  2. Диалог без сметы (вопросы по прайсу) — доступен в демо-организации
+ *     всем, а вошедшему пользователю — только пока он пуст, то есть это
+ *     его собственный новый диалог.
+ *
+ * Пустой диалог разрешён намеренно: перед первым вопросом истории ещё
+ * нет, и запрет сломал бы обычный сценарий «задать вопрос без сметы».
+ */
+export async function canAccessConversation(
+  conversationId: string,
+  orgId: string,
+): Promise<boolean> {
+  try {
+    const rows = await withRetry(
+      async (sql) =>
+        sql<{ estimate_org: string | null; messages: number }[]>`
+          select
+            (select e.org_id from estimates e
+              where e.id = (select estimate_id from chat_messages
+                             where conversation_id = ${conversationId}
+                               and estimate_id is not null
+                             limit 1)
+              limit 1) as estimate_org,
+            (select count(*)::int from chat_messages
+              where conversation_id = ${conversationId}) as messages
+        `,
+      { label: "право на диалог" },
+    );
+
+    const row = rows[0];
+    if (!row) return true;
+
+    // Диалог, привязанный к смете: решает владелец сметы
+    if (row.estimate_org) return row.estimate_org === orgId;
+
+    // Диалог без сметы: в демо-организации открыт, у остальных — только пустой
+    if (orgId === DEMO_ORG_ID) return true;
+    return row.messages === 0;
+  } catch (e) {
+    // Если проверка не удалась, отказываем: ошибка в сторону отказа, а не
+    // доступа. Цена отказа — неудобство, цена доступа — утечка.
+    console.error(
+      "[chat] не удалось проверить право на диалог:",
+      e instanceof Error ? e.message : e,
+    );
+    return false;
   }
 }
 
