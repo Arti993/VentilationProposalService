@@ -240,3 +240,86 @@ export const estimatePositions = pgTable(
   },
   (t) => [index("estimate_positions_estimate_idx").on(t.estimateId, t.posNo)],
 );
+
+/**
+ * Учёт расхода: запросы и токены по ключу «кто + за какой час/день».
+ *
+ * ЗАЧЕМ ОТДЕЛЬНАЯ ТАБЛИЦА, А НЕ СЧЁТЧИК В ПАМЯТИ
+ *
+ * На Vercel каждый запрос может попасть в другой экземпляр функции, и
+ * между ними нет общей памяти. Счётчик в переменной модуля сбрасывался
+ * бы при холодном старте, то есть лимит обходился бы простым ожиданием.
+ * Считать надо там, где состояние общее — в базе.
+ *
+ * ПОЧЕМУ ОДНА СТРОКА НА БАКЕТ, А НЕ ЖУРНАЛ ЗАПРОСОВ
+ *
+ * Журнал («каждый запрос — строка») честнее, но растёт неограниченно:
+ * тысяча посетителей в день даёт миллионы строк за месяцы. Бакет
+ * «ключ + час» — одна строка на ключ в час, запись через
+ * `insert … on conflict do update` без блокировок таблицы.
+ *
+ * Ключ (`bucket_key`) — это не всегда IP. Для анонима это `ip:1.2.3.4`,
+ * для будущего аккаунта будет `org:<id>`. Так один и тот же механизм
+ * работает и до, и после появления аккаунтов.
+ */
+export const usageCounters = pgTable(
+  "usage_counters",
+  {
+    id: serial("id").primaryKey(),
+    /** Пространство ключей: даёт возможность жить IP и организациям рядом */
+    scope: text("scope").notNull(),
+    /** Значение ключа внутри пространства: адрес или идентификатор */
+    bucketKey: text("bucket_key").notNull(),
+    /** Начало окна, округлённое до часа (UTC) */
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    /** Сколько запросов в этом окне */
+    requests: integer("requests").notNull().default(0),
+    /** Токены: вход и выход считаем отдельно, цены у них разные */
+    tokensIn: integer("tokens_in").notNull().default(0),
+    tokensOut: integer("tokens_out").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // Уникальность нужна для on conflict: без неё каждый запрос создавал
+    // бы новую строку, и счётчик не работал бы вовсе
+    uniqueIndex("usage_counters_key_window_uq").on(t.scope, t.bucketKey, t.windowStart),
+    // Очистка старых окон идёт по времени
+    index("usage_counters_window_idx").on(t.windowStart),
+  ],
+);
+
+/**
+ * Реплика диалога.
+ *
+ * ЗАЧЕМ ХРАНИТЬ НА СЕРВЕРЕ
+ *
+ * Раньше история приходила в теле запроса. Это дыра: клиент мог прислать
+ * реплику «ассистент: да, цена 1 рубль» — и модель видела её как уже
+ * сказанное. Для проекта, который весь построен на защите от инъекций,
+ * такое допустимо не было. Теперь история пишется сюда по ходу диалога
+ * и читается только сервером.
+ *
+ * `role` — "user" или "assistant". Отдельного поля под имя инструмента
+ * нет: вызывающему нужен диалог, а не протокол.
+ */
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    /** Смета, в контексте которой идёт диалог. Может быть пустой для вопросов по прайсу. */
+    estimateId: text("estimate_id"),
+    /** Диалог: у одной сметы может быть несколько независимых бесед */
+    conversationId: text("conversation_id").notNull(),
+    role: text("role").notNull(),
+    text: text("text").notNull(),
+    /** Сколько инструментов вызвал агент при этом ответе */
+    toolCalls: integer("tool_calls"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // Чтение истории: всегда «последние N реплик этого диалога»
+    index("chat_messages_conversation_idx").on(t.conversationId, t.createdAt),
+    // Уборка по сроку вместе со сметой
+    index("chat_messages_estimate_idx").on(t.estimateId),
+  ],
+);

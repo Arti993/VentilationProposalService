@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Loader2, Sparkles, Bot, User } from "lucide-react";
 import { cn } from "@shared/lib/cn";
-import { askAgent, type ChatTurn } from "@shared/api/client";
+import { askAgent } from "@shared/api/client";
 
 interface ChatPanelProps {
   sessionId?: string;
@@ -96,8 +96,9 @@ export function ChatPanel({
       setBusy(true);
 
       try {
-        const history: ChatTurn[] = messages.map((m) => ({ role: m.role, text: m.text }));
-        const res = await askAgent(q, history, sessionId);
+        // История на сервере: он читает её по conversationId и сам решает,
+        // что показать модели. Браузер присылает только новые слова.
+        const res = await askAgent(q, { sessionId, conversationId: sessionId });
         setMessages((m) => [...m, { role: "assistant", text: res.answer, ms: res.ms }]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка чата");
@@ -105,7 +106,7 @@ export function ChatPanel({
         setBusy(false);
       }
     },
-    [busy, messages, sessionId],
+    [busy, sessionId],
   );
 
   // Внешний вопрос (клик по позиции в таблице) — задаём один раз

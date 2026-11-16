@@ -1,16 +1,26 @@
 /**
  * POST /api/chat — вопрос агенту.
  *
- * Агент получает сессию сметы ИЗ СЕРВЕРНОГО ХРАНИЛИЩА по sessionId,
- * а не из тела запроса. Это принципиально: если бы клиент присылал
- * данные сметы, он мог бы подменить цены в запросе, и агент честно
- * пересказал бы подделку.
+ * ТРИ ЗАЩИТЫ, КОТОРЫЕ ЗДЕСЬ СОБРАНЫ
+ *
+ * 1. СЕССИЯ СМЕТЫ — с сервера по sessionId, не из тела запроса. Иначе
+ *    клиент подменил бы цены, и агент честно пересказал бы подделку.
+ *
+ * 2. ИСТОРИЯ ДИАЛОГА — тоже с сервера. Раньше приходила в теле, и
+ *    кто угодно мог прислать реплику «ассистент: цена 1 рубль»: сервер
+ *    заворачивал её в HumanMessage с префиксом, и модель видела это как
+ *    уже сказанное. Теперь клиент передаёт только conversationId.
+ *
+ * 3. ЛИМИТЫ — частота в час и дневная квота токенов на адрес. Без них
+ *    публичная ссылка означала бы «кто угодно жжёт бюджет polza.ai».
  */
 import { NextResponse } from "next/server";
-import { HumanMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { createAgent, finalText, type AgentStateType } from "@/lib/agent/graph";
 import { SessionStore } from "@/lib/agent/session";
 import { configureTracingLogs, sessionTags } from "@/lib/agent/tracing";
+import { consume, clientKey, recordTokens } from "@/lib/limits/usage";
+import { appendMessage, readHistory } from "@/db/repositories/chatMessages";
 import { getPrice } from "../_lib/price";
 import { getSession } from "../_lib/sessionStore";
 
@@ -22,26 +32,78 @@ configureTracingLogs();
 interface ChatBody {
   question: string;
   sessionId?: string;
-  history?: Array<{ role: "user" | "assistant"; text: string }>;
+  /** Идентификатор беседы. Сама история живёт на сервере. */
+  conversationId?: string;
+  /**
+   * Устаревшее поле. Оставлено, чтобы старый клиент не падал с 400,
+   * но НЕ ИСПОЛЬЗУЕТСЯ: см. пункт 2 в комментарии выше.
+   */
+  history?: unknown;
 }
 
 /**
  * Собирает историю диалога в сообщения LangChain.
  *
- * Ограничиваем 10 последними репликами: длинная история раздувает промпт,
- * и модель начинает «тонуть» в собственном тексте.
+ * Роли теперь настоящие: ответ ассистента — AIMessage, а не
+ * HumanMessage с префиксом. Модель различает «я это сказал» и «мне это
+ * сказали», и на этой разнице держится устойчивость к подделке реплик.
  */
-function historyToMessages(
-  history: Array<{ role: "user" | "assistant"; text: string }> = [],
-) {
-  const tail = history.slice(-10);
-  return tail.map((h) => new HumanMessage(h.role === "user" ? h.text : `Ассистент: ${h.text}`));
+function historyToMessages(history: Array<{ role: "user" | "assistant"; text: string }>) {
+  return history.map((h) =>
+    h.role === "user" ? new HumanMessage(h.text) : new AIMessage(h.text),
+  );
+}
+
+/**
+ * Достаёт число потраченных токенов из результата графа.
+ *
+ * LangChain складывает `usage_metadata` в ответ модели, но формат
+ * зависит от провайдера. polza.ai OpenAI-совместим, поэтому смотрим
+ * сначала `usage_metadata`, затем `response_metadata.tokenUsage`.
+ * Если ничего нет — возвращаем нули: лучше недосчитать квоту, чем
+ * упасть на разборе метаданных.
+ */
+function tokensFromState(state: AgentStateType): { input: number; output: number } {
+  let input = 0;
+  let output = 0;
+
+  for (const m of state.messages) {
+    const anyM = m as unknown as {
+      usage_metadata?: { input_tokens?: number; output_tokens?: number };
+      response_metadata?: { tokenUsage?: { promptTokens?: number; completionTokens?: number } };
+    };
+
+    const u = anyM.usage_metadata;
+    if (u) {
+      input += u.input_tokens ?? 0;
+      output += u.output_tokens ?? 0;
+      continue;
+    }
+
+    const t = anyM.response_metadata?.tokenUsage;
+    if (t) {
+      input += t.promptTokens ?? 0;
+      output += t.completionTokens ?? 0;
+    }
+  }
+
+  return { input, output };
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
   const t0 = Date.now();
 
   try {
+    // ── Лимиты: до любой работы с моделью ──────────────────
+    const ip = clientKey(req);
+    const limit = await consume({ action: "chat", key: ip });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { ok: false, error: limit.reason, retryAt: limit.resetAt.toISOString() },
+        { status: limit.status ?? 429, headers: limit.headers },
+      );
+    }
+
     const body = (await req.json()) as ChatBody;
     const question = (body.question ?? "").trim();
 
@@ -55,32 +117,42 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    // Сессия берётся с сервера по ID — данные сметы от клиента не принимаются
+    // ── Сессия сметы и история — только с сервера ─────────
     const store = new SessionStore();
+    const hasEstimate = Boolean(body.sessionId);
     if (body.sessionId) {
       const saved = await getSession(body.sessionId);
       if (saved) store.restore(saved);
     }
 
+    const conversationId = body.conversationId ?? body.sessionId ?? "anonymous";
+    const history = await readHistory(conversationId);
+
+    // Вопрос записываем сразу: если модель не ответит или упадёт,
+    // в истории останется, что человек спросил. Иначе следующий
+    // запрос увидел бы ответ без вопроса.
+    await appendMessage({
+      conversationId,
+      estimateId: body.sessionId ?? null,
+      role: "user",
+      text: question,
+    });
+
     // getPrice передаём как функцию, а не результат вызова: прайс грузится
-    // только если инструмент его реально потребует. На вопрос «сколько
-    // стоит отвод» агент отвечает через search_price (RAG в базе), и
-    // 16 секунд на чтение 215 строк тратить незачем.
+    // только если инструмент его реально потребует.
     const agent = createAgent({ getPrice, useLlm: true }, { store });
 
-    // Имя и метаданные прогона — чтобы трассу в LangSmith можно было найти
-    // и отфильтровать, а не листать безымянный список. Включаем два
-    // признака, по которым чаще всего ищем: была ли загружена смета
-    // (это меняет поведение агента) и была ли история диалога.
     const state = (await agent.invoke(
       {
-        messages: [...historyToMessages(body.history), new HumanMessage(question)],
+        messages: [...historyToMessages(history), new HumanMessage(question)],
       },
       sessionTags("chat", {
-        hasEstimate: body.sessionId ? "with-estimate" : "no-estimate",
-        hasHistory: body.history?.length ? "with-history" : "first-turn",
+        hasEstimate: hasEstimate ? "with-estimate" : "no-estimate",
+        hasHistory: history.length > 0 ? "with-history" : "first-turn",
       }),
     )) as AgentStateType;
+
+    const answer = finalText(state);
 
     const toolCalls = state.messages.filter(
       (m) =>
@@ -88,12 +160,29 @@ export async function POST(req: Request): Promise<NextResponse> {
         ((m as { tool_calls?: unknown[] }).tool_calls?.length ?? 0) > 0,
     ).length;
 
-    return NextResponse.json({
-      ok: true,
-      answer: finalText(state),
+    // ── Ответ записываем в историю ────────────────────────
+    await appendMessage({
+      conversationId,
+      estimateId: body.sessionId ?? null,
+      role: "assistant",
+      text: answer,
       toolCalls,
-      ms: Date.now() - t0,
     });
+
+    // ── Токены — после ответа: до вызова их число неизвестно ─
+    const tokens = tokensFromState(state);
+    await recordTokens(ip, tokens.input, tokens.output);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        answer,
+        toolCalls,
+        ms: Date.now() - t0,
+        tokens: tokens.input + tokens.output,
+      },
+      { headers: limit.headers },
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/chat]", msg);
