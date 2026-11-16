@@ -100,7 +100,19 @@ export function connectOnce(timeoutMs = 20_000): ReturnType<typeof postgres> {
 
   return postgres(url, {
     ssl: "require",
-    prepare: false,
+    // prepare: false БЫЛ ЗДЕСЬ ОШИБКОЙ.
+    //
+    // Его ставят «как рекомендуют для пулера Neon в transaction mode».
+    // Замеры на этой базе показали другое: без prepared statements
+    // postgres.js не может выполнить транзакцию из двух и более запросов
+    // — соединение рвётся с CONNECTION_CLOSED через ~19 секунд. С
+    // `prepare: true` та же транзакция проходит за 390 мс.
+    //
+    // Отсюда же росли все прежние «обрывы на третьем запросе»: это был
+    // не пулер, а драйвер без подготовленных запросов. Культура «одно
+    // соединение — один запрос» в этом файле выросла из того же
+    // заблуждения.
+    prepare: true,
     max: 1,
     connect_timeout: Math.ceil(timeoutMs / 1000),
     idle_timeout: 0,
