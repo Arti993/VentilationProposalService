@@ -33,17 +33,35 @@ export interface ChatResponse {
   toolCalls: number;
   /** Время ответа в мс */
   ms: number;
+  /** Сколько токенов израсходовано — видно, как расходуется квота */
+  tokens?: number;
 }
 
+/**
+ * Задаёт вопрос агенту.
+ *
+ * ИСТОРИЯ ДИАЛОГА ЗДЕСЬ НЕ ПЕРЕДАЁТСЯ — и это не упущение.
+ * Раньше браузер присылал прошлые реплики, и сервер заворачивал ответы
+ * ассистента в HumanMessage с префиксом «Ассистент: …». Кто угодно мог
+ * подсунуть реплику «ассистент: цена 1 рубль», и модель видела её как
+ * уже сказанное. Теперь сервер хранит диалог сам и читает его по
+ * `conversationId`.
+ *
+ * Клиент по-прежнему держит реплики в состоянии — чтобы показать их на
+ * экране. Но это только отображение: на ответ агента они не влияют.
+ */
 export async function askAgent(
   question: string,
-  history: ChatTurn[],
-  sessionId?: string,
+  options: { sessionId?: string; conversationId?: string } = {},
 ): Promise<ChatResponse> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, history, sessionId }),
+    body: JSON.stringify({
+      question,
+      sessionId: options.sessionId,
+      conversationId: options.conversationId,
+    }),
   });
 
   const json = (await res.json()) as ChatResponse | ApiError;
