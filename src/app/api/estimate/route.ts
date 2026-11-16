@@ -29,6 +29,7 @@ import {
 } from "@/lib/estimate/binary.ts";
 import { processRows } from "@/lib/matcher/hybrid.ts";
 import { createSession } from "@/lib/agent/session.ts";
+import { clientKey, consume, pruneOldCounters } from "@/lib/limits/usage";
 import type { EstimateSession } from "@entities/estimate/model/types";
 import { getPrice } from "../_lib/price";
 import { createSessionId, saveSession } from "../_lib/sessionStore";
@@ -57,6 +58,22 @@ function isOle(bytes: Uint8Array): boolean {
 
 export async function POST(req: Request): Promise<NextResponse> {
   try {
+    // ── Лимит: до разбора файла ────────────────────────────
+    // Загрузка дороже вопроса агенту: разбор Excel, матчинг сотни строк
+    // и, для спорных позиций, вызовы LLM. Проверяем до чтения тела —
+    // иначе один скрипт заставит сервер разбирать тысячи файлов.
+    const ip = clientKey(req);
+    const limit = await consume({ action: "upload", key: ip });
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { ok: false, error: limit.reason, retryAt: limit.resetAt.toISOString() },
+        { status: limit.status ?? 429, headers: limit.headers },
+      );
+    }
+
+    // Уборка старых счётчиков — попутно, без отдельного крона
+    void pruneOldCounters();
+
     const form = await req.formData();
     const file = form.get("file");
 
@@ -152,7 +169,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
         // Excel уже разобран в структуру — текстовый парсер не нужен.
         // Превращаем строки в общий формат EstimateRow.
-        return await processAndRespond(file.name, rows);
+        return await processAndRespond(file.name, rows, limit.headers);
       }
 
       case "word": {
@@ -186,7 +203,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    return await processAndRespond(file.name, rows);
+    return await processAndRespond(file.name, rows, limit.headers);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/estimate]", msg);
@@ -214,6 +231,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 async function processAndRespond(
   fileName: string,
   rows: Parameters<typeof processRows>[0],
+  headers: Record<string, string>,
 ): Promise<NextResponse> {
   const price = await getPrice();
   const results = await processRows(rows, price, { concurrency: 3 });
@@ -227,6 +245,9 @@ async function processAndRespond(
 
   // Отдаём клиенту, но сессию на сервере тоже сохраняем: чат возьмёт
   // данные оттуда, а не из тела запроса — так их нельзя подменить.
+  //
+  // Заголовки лимита прикладываем и к успешному ответу: по ним клиент
+  // понимает, сколько попыток осталось, и не бьётся в 429 вслепую.
   const response: EstimateSession & { id: string } = { ...session, id };
-  return NextResponse.json({ ok: true, session: response });
+  return NextResponse.json({ ok: true, session: response }, { headers });
 }
