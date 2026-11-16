@@ -20,7 +20,8 @@ import { createAgent, finalText, type AgentStateType } from "@/lib/agent/graph";
 import { SessionStore } from "@/lib/agent/session";
 import { configureTracingLogs, sessionTags } from "@/lib/agent/tracing";
 import { consume, clientKey, recordTokens } from "@/lib/limits/usage";
-import { appendMessage, readHistory } from "@/db/repositories/chatMessages";
+import { appendMessage, readHistory, canAccessConversation } from "@/db/repositories/chatMessages";
+import { getActor, viewerOrganization } from "@/lib/auth/guard";
 import { getPrice } from "../_lib/price";
 import { getSession } from "../_lib/sessionStore";
 
@@ -120,12 +121,47 @@ export async function POST(req: Request): Promise<NextResponse> {
     // ── Сессия сметы и история — только с сервера ─────────
     const store = new SessionStore();
     const hasEstimate = Boolean(body.sessionId);
+
+    /**
+     * Организация, от имени которой идёт диалог.
+     *
+     * `viewerOrganization`, а не `actor?.orgId || DEMO_ORG_ID`: через `||`
+     * пустой orgId (пользователь без организации) становился демо-прайсом,
+     * и все видели общие сметы и диалоги.
+     */
+    const actor = await getActor();
+    const viewerOrg = viewerOrganization(actor);
+
     if (body.sessionId) {
-      const saved = await getSession(body.sessionId);
+      // Смета читается с проверкой организации: иначе, зная id, можно
+      // было бы расспросить агента о чужой смете — ценах, составе,
+      // суммах.
+      const saved = await getSession(body.sessionId, viewerOrg);
       if (saved) store.restore(saved);
     }
 
     const conversationId = body.conversationId ?? body.sessionId ?? "anonymous";
+
+    /**
+     * Право на диалог.
+     *
+     * `conversationId` приходит от клиента и угадывается не хуже, чем id
+     * сметы: он виден в запросе в панели разработчика. Читать по нему
+     * чужую переписку — утечка того же класса, что и чужое КП.
+     *
+     * Проверка простая и достаточная: диалог принадлежит либо смете
+     * этой организации, либо (если сметы нет) доступен только анониму
+     * в демо-организации. Второе условие нужно, чтобы аноним не читал
+     * диалоги вошедших пользователей, зная их идентификаторы.
+     */
+    const ownsConversation = await canAccessConversation(conversationId, viewerOrg);
+    if (!ownsConversation) {
+      return NextResponse.json(
+        { ok: false, error: "Диалог не найден." },
+        { status: 404, headers: limit.headers },
+      );
+    }
+
     const history = await readHistory(conversationId);
 
     // Вопрос записываем сразу: если модель не ответит или упадёт,

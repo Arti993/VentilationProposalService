@@ -14,8 +14,10 @@ import { writeFileSync } from "node:fs";
 const BASE = process.env.UI_BASE ?? "http://localhost:3000";
 const CDP = "http://127.0.0.1:9222";
 
-const WIDTHS = [360, 390, 768, 1024, 1280, 1440, 1920];
-const PAGES = ["/", "/app"];
+const WIDTHS = [320, 360, 390, 768, 1024, 1280, 1440, 1920];
+// 320px — самый узкий телефон в ходу (iPhone SE 1st gen). Именно на нём
+// ломалась шапка формы входа: логотип и «На главную» не влезали в ряд.
+const PAGES = ["/", "/app", "/login"];
 
 interface Target {
   id: string;

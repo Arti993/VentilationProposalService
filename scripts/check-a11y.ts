@@ -75,7 +75,9 @@ async function main() {
     mobile: false,
   });
 
-  for (const path of ["/", "/app"]) {
+  // `/login` добавлена вместе с аккаунтами: форму видит новый
+  // пользователь первым, и контраст подписей там важнее, чем на лендинге.
+  for (const path of ["/", "/app", "/login"]) {
     await send("Page.navigate", { url: `${BASE}${path}` });
     await new Promise((r) => setTimeout(r, 2000));
 

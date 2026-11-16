@@ -34,11 +34,16 @@
 
 name: Проверка
 
+# Ветки: проверяем и dev, и main.
+#
+# Раньше здесь был только main — и на PR в dev проверки не запускались
+# вовсе. Регрессия попадала в dev незамеченной, а узнавали о ней уже на
+# релизном PR, когда исправлять дороже.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 # Лишние прогоны на тот же коммит отменяем: при серии пушей важно
 # проверить последний, а не каждый промежуточный.
@@ -76,9 +81,14 @@ jobs:
           # Скрипт перезаписывает data/price.normalized.json. Если файл
           # в репозитории устарел или разбор изменился — это надо увидеть,
           # а не потерять.
-          if ! git diff --quiet -- data/price.normalized.json; then
+          #
+          # Сравниваем после `git add`: так git учитывает .gitattributes и
+          # нормализацию переносов строк. Без этого на Linux и Windows
+          # получались ложные срабатывания — файлы отличались только CRLF.
+          git add --renormalize data/price.normalized.json
+          if ! git diff --cached --quiet -- data/price.normalized.json; then
             echo "::error::normalize-price.ts изменил data/price.normalized.json — закоммитьте результат"
-            git diff --stat -- data/price.normalized.json
+            git diff --cached --stat -- data/price.normalized.json
             exit 1
           fi
 
@@ -96,3 +106,8 @@ jobs:
           POLZA_API_KEY: "ci-placeholder"
           POLZA_BASE_URL: "https://polza.ai/api/v1"
           DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+          # Модуль авторизации требует секрет при импорте и падает, если
+          # его нет или он короче 32 символов. Поведение правильное:
+          # сессии, подписанные известным секретом, можно подделать.
+          # Здесь заглушка нужной длины — к базе сборка не ходит.
+          BETTER_AUTH_SECRET: "ci-placeholder-secret-32-chars-xxxxxx"

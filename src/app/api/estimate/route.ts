@@ -30,6 +30,8 @@ import {
 import { processRows } from "@/lib/matcher/hybrid.ts";
 import { createSession } from "@/lib/agent/session.ts";
 import { clientKey, consume, pruneOldCounters } from "@/lib/limits/usage";
+import { getActor, viewerOrganization } from "@/lib/auth/guard";
+import type { SessionOwner } from "@/db/repositories/sessions";
 import type { EstimateSession } from "@entities/estimate/model/types";
 import { getPrice } from "../_lib/price";
 import { createSessionId, saveSession } from "../_lib/sessionStore";
@@ -73,6 +75,24 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // Уборка старых счётчиков — попутно, без отдельного крона
     void pruneOldCounters();
+
+    /**
+     * Владелец создаваемой сметы.
+     *
+     * Вошедший пользователь пишет в свою организацию. Анонимный
+     * (или не вошедший вовсе) — в демо-организацию: работодатель
+     * открывает ссылку и должен увидеть работающий продукт, не
+     * регистрируясь. Данные анонимов живут по общему TTL и никому
+     * больше не видны.
+     */
+    const actor = await getActor();
+    // `viewerOrganization`, а не `actor?.orgId || DEMO_ORG_ID`: пустой
+    // orgId через `||` становился демо-прайсом, и смета пользователя без
+    // организации попадала в общую.
+    const owner: SessionOwner = {
+      orgId: viewerOrganization(actor),
+      userId: actor?.userId ?? null,
+    };
 
     const form = await req.formData();
     const file = form.get("file");
@@ -169,7 +189,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
         // Excel уже разобран в структуру — текстовый парсер не нужен.
         // Превращаем строки в общий формат EstimateRow.
-        return await processAndRespond(file.name, rows, limit.headers);
+        return await processAndRespond(file.name, rows, limit.headers, owner);
       }
 
       case "word": {
@@ -203,7 +223,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    return await processAndRespond(file.name, rows, limit.headers);
+    return await processAndRespond(file.name, rows, limit.headers, owner);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/estimate]", msg);
@@ -232,6 +252,7 @@ async function processAndRespond(
   fileName: string,
   rows: Parameters<typeof processRows>[0],
   headers: Record<string, string>,
+  owner: SessionOwner,
 ): Promise<NextResponse> {
   const price = await getPrice();
   const results = await processRows(rows, price, { concurrency: 3 });
@@ -241,7 +262,7 @@ async function processAndRespond(
 
   // Сохраняем ДО ответа: если БД недоступна, пользователь узнает об
   // ошибке сразу, а не получит «работающий» интерфейс с мёртвой сессией.
-  await saveSession(id, session);
+  await saveSession(id, session, owner);
 
   // Отдаём клиенту, но сессию на сервере тоже сохраняем: чат возьмёт
   // данные оттуда, а не из тела запроса — так их нельзя подменить.
