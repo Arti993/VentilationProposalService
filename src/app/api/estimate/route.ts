@@ -306,6 +306,24 @@ async function processAndRespond(
     const synonyms = await appliedSynonyms(owner.orgId);
     if (synonyms.length > 0) {
       const table = buildSynonymTable(synonyms);
+
+      /**
+       * Конфликтующие формулировки исключены из словаря. Логируем их
+       * явно: иначе менеджеры, подтвердившие разные позиции по одной
+       * фразе, никогда не узнают, что их разбор не работает.
+       *
+       * Чинить это должен человек (решить, кто прав), а не код: понять,
+       * чей разбор вернее, у нас нет способа.
+       */
+      if (table.conflicts.length > 0) {
+        console.warn(
+          `[estimate] синонимы: ${table.conflicts.length} конфликт(ов) — ` +
+            table.conflicts
+              .map((c) => `«${c.phrase}» → ${c.codes.join(" / ")}`)
+              .join("; "),
+        );
+      }
+
       const names = new Map(price.map((p) => [p.id, p.rawName]));
       /**
        * Размеры позиций нужны, чтобы не дублировать их в названии.
