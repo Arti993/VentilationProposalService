@@ -10,11 +10,12 @@
  * сетка, минимум отступов, липкая шапка с действиями. Пользователь
  * возвращается сюда каждый день.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
 import { UploadEstimate } from "@features/upload-estimate";
-import { UploadPrice } from "@features/upload-price";
+import { UploadPrice, fetchPriceItems } from "@features/upload-price";
+import type { PriceItem } from "@features/upload-price/api/client";
 import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
 import { SummaryCards } from "@widgets/estimate-summary";
@@ -26,6 +27,26 @@ type Session = EstimateSession & { id: string };
 
 export function ProposalPage() {
   const [session, setSession] = useState<Session | null>(null);
+
+  /**
+   * Прайс для разбора спорных строк.
+   *
+   * Грузится один раз при появлении сметы, а не заранее: до загрузки КП
+   * страницу открывают ради самой загрузки, и 40 КБ прайса там ни к чему.
+   * Ошибка загрузки не ломает экран — разбор просто не появится.
+   */
+  const [price, setPrice] = useState<PriceItem[]>([]);
+
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    void fetchPriceItems().then((items) => {
+      if (alive) setPrice(items);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [session]);
 
   /** Клик по позиции в таблице — подставить вопрос в чат */
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
@@ -198,7 +219,12 @@ export function ProposalPage() {
                   таблица распирает колонку и появляется горизонтальный скролл. */}
               <section className="min-w-0 space-y-4">
                 <SummaryCards stats={session.stats} />
-                <EstimateTable positions={session.positions} onSelect={selectPosition} />
+                <EstimateTable
+                  positions={session.positions}
+                  onSelect={selectPosition}
+                  price={price}
+                  estimateId={session.id}
+                />
               </section>
 
               {/* Правая колонка: чат. На мобильном идёт после таблицы. */}

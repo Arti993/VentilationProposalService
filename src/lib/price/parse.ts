@@ -137,11 +137,82 @@ function priceOf(raw: unknown): number | null {
  *
  * Принимает уже прочитанный буфер: чтение файла и разбор разделены, чтобы
  * разбор можно было проверить в тестах без файловой системы.
+ *
+ * ЛОВУШКА С КОДИРОВКОЙ CSV
+ *
+ * SheetJS читает байты CSV как `latin1`, а не как UTF-8. Кириллица при
+ * этом превращается в мусор: «Наименование» становится «ÐÐ°Ð¸Ð¼ÐµÐ½Ð¾Ð²Ð°Ð½Ð¸Ðµ», и разбор
+ * отвечает «не нашёл колонки». Симптом обманчив — кажется, что клиент
+ * прислал файл не того формата, хотя формат верный.
+ *
+ * Поэтому CSV декодируем сами и отдаём строку с `type: "string"`. Только
+ * так SheetJS получает уже правильный текст.
+ *
+ * Кодировку определяем по BOM:
+ *   EF BB BF       — UTF-8 (его ставит Excel при «CSV UTF-8»)
+ *   FF FE / FE FF  — UTF-16 LE/BE
+ *   без BOM         — пробуем UTF-8: если текст валиден, берём его,
+ *                     иначе падаем на Windows-1251 (её даёт «CSV (разделители
+ *                     с запятой)» в русской Windows)
+ *
+ * Проверка «валиден ли UTF-8» делается через `TextDecoder` с
+ * `fatal: true`: он бросает исключение на некорректных
+ * последовательностях. Битые байты на выходе не «заменяются», как в
+ * обычном режиме, а сигнализируют, что это не UTF-8.
  */
+export function decodeCsv(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+
+  // BOM → кодировка известна точно
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder("utf-8").decode(bytes.subarray(3));
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(bytes.subarray(2));
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    /**
+     * Не UTF-8 — почти наверняка Windows-1251, самая частая кодировка
+     * русских CSV. `TextDecoder` понимает её как "windows-1251" в Node 18+
+     * и в браузерах, так что дополнительных зависимостей не нужно.
+     */
+    return new TextDecoder("windows-1251").decode(bytes);
+  }
+}
+
+/** Похоже ли содержимое на CSV: расширение здесь не единственный признак. */
+function looksLikeCsv(buffer: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buffer);
+
+  // ZIP-сигнатура: XLSX — это zip-архив
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return false;
+  // Старый бинарный XLS
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf) return false;
+
+  // Текстовый файл: BOM, либо в начале нет нулевых байтов
+  if (bytes[0] === 0xef || bytes[0] === 0xff || bytes[0] === 0xfe) return true;
+  return !bytes.subarray(0, 64).includes(0);
+}
+
 export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
   let sheet: XLSX.WorkSheet;
   try {
-    const book = XLSX.read(buffer, { type: "array" });
+    /**
+     * CSV читаем как текст, всё остальное — как массив байт.
+     *
+     * Проверяем содержимое, а не расширение: файл `price.csv` может
+     * оказаться переименованным xlsx (частая история при пересылке через
+     * мессенджеры), и наоборот. Расширение — подсказка, а не факт.
+     */
+    const book = looksLikeCsv(buffer)
+      ? XLSX.read(decodeCsv(buffer), { type: "string" })
+      : XLSX.read(buffer, { type: "array" });
     const first = book.SheetNames[0];
     if (!first) {
       return {
