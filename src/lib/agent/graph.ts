@@ -296,6 +296,47 @@ export function createAgent(
   return graph.compile();
 }
 
+/**
+ * Прогоняет агента потоком, отдавая шаги по мере выполнения.
+ *
+ * Зачем отдельная функция, а не `invoke` с колбэком: нам нужно ЗНАТЬ,
+ * какой именно узел начался и закончился, чтобы показать пользователю
+ * «смотрю прайс» вместо общего «думаю…». `stream` с `streamMode: "updates"`
+ * отдаёт ровно это — объект с именем узла в ключе на каждой итерации.
+ *
+ * Текст ответа при этом не режется на токены: узел `agent` внутри сам
+ * вызывает модель через `invoke`, и токенного потока из него нет. Слайс
+ * токенов без переписывания узла был бы имитацией, а не стримингом.
+ * Поэтому отдаём шаги (это реальный прогресс) и финальный текст целиком.
+ * Переписывание узла на `model.stream` — следующий шаг, и он вдвое дороже
+ * по риску: там уже надо склеивать фрагменты и заново считать `tool_calls`.
+ *
+ * @param onStep вызывается при входе в узел и на выходе из него
+ */
+export async function* streamAgent<G extends ReturnType<typeof createAgent>>(
+  graph: G,
+  input: Parameters<G["invoke"]>[0],
+  options: Parameters<G["invoke"]>[1],
+  onStep?: (node: string, phase: "start" | "done", ms?: number) => void,
+): AsyncGenerator<{ node: string; state?: AgentStateType }> {
+  const startedAt = new Map<string, number>();
+
+  const stream = await graph.stream(input, { ...options, streamMode: "updates" });
+
+  for await (const chunk of stream) {
+    for (const [node, update] of Object.entries(chunk as Record<string, unknown>)) {
+      const began = startedAt.get(node);
+      if (began === undefined) {
+        startedAt.set(node, Date.now());
+        onStep?.(node, "start");
+      } else {
+        onStep?.(node, "done", Date.now() - began);
+      }
+      yield { node, state: update as AgentStateType | undefined };
+    }
+  }
+}
+
 /** Возвращает финальный текстовый ответ агента. */
 export function finalText(state: AgentStateType): string {
   for (let i = state.messages.length - 1; i >= 0; i--) {

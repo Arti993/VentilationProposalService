@@ -27,6 +27,8 @@
  * чтением кода и ручной проверкой через usageSnapshot().
  */
 
+import { readChatStream } from "./chatStream.ts";
+
 const BASE = process.argv[2] ?? "http://localhost:3000";
 
 let passed = 0;
@@ -77,6 +79,7 @@ async function ask(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "text/event-stream",
       "X-Forwarded-For": opts.ip,
     },
     body: JSON.stringify({
@@ -87,11 +90,26 @@ async function ask(
     }),
   });
 
+  /**
+   * Отказы (401/403/429/400) приходят обычным JSON, успешный ответ —
+   * потоком SSE. Различаем по типу содержимого: на потоке `res.json()`
+   * падает с `Unexpected token 'e'`, и без этой развилки тест лимитов
+   * показывал «ответ не JSON» на каждом успешном запросе.
+   */
+  const isStream = res.headers.get("content-type")?.includes("text/event-stream") ?? false;
+
   let body: ChatReply["body"] = {};
-  try {
-    body = (await res.json()) as ChatReply["body"];
-  } catch {
-    body = { error: "ответ не JSON" };
+  if (isStream) {
+    const parsed = await readChatStream(res);
+    body = parsed.ok
+      ? { ok: true, answer: parsed.answer, toolCalls: parsed.toolCalls, ms: parsed.ms }
+      : { error: parsed.error };
+  } else {
+    try {
+      body = (await res.json()) as ChatReply["body"];
+    } catch {
+      body = { error: "ответ не JSON" };
+    }
   }
   return { status: res.status, body, headers: res.headers };
 }
