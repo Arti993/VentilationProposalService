@@ -61,6 +61,15 @@ function isOle(bytes: Uint8Array): boolean {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
+  /**
+   * Точка отсчёта для метрики времени разбора.
+   *
+   * Ставится ДО любых проверок и чтения тела: `/status` показывает эту
+   * цифру как «от файла до готового КП», и всё, что происходит до неё,
+   * тоже часть работы пользователя.
+   */
+  const startedAt = Date.now();
+
   try {
     // ── Лимит: до разбора файла ────────────────────────────
     // Загрузка дороже вопроса агенту: разбор Excel, матчинг сотни строк
@@ -191,7 +200,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
         // Excel уже разобран в структуру — текстовый парсер не нужен.
         // Превращаем строки в общий формат EstimateRow.
-        return await processAndRespond(file.name, rows, limit.headers, owner);
+        return await processAndRespond(file.name, rows, limit.headers, owner, startedAt);
       }
 
       case "word": {
@@ -225,7 +234,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       );
     }
 
-    return await processAndRespond(file.name, rows, limit.headers, owner);
+    return await processAndRespond(file.name, rows, limit.headers, owner, startedAt);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/estimate]", msg);
@@ -255,6 +264,21 @@ async function processAndRespond(
   rows: Parameters<typeof processRows>[0],
   headers: Record<string, string>,
   owner: SessionOwner,
+  /**
+   * Когда начался разбор — передаётся из `POST`, а не берётся здесь.
+   *
+   * ЗАЧЕМ ПАРАМЕТРОМ
+   *
+   * Первая версия ставила `Date.now()` в начале этой функции, и медиана
+   * получалась 1 мс при реальных трёх секундах. Причина: файл к этому
+   * моменту уже разобран, строки уже извлечены, и сюда приходит готовый
+   * список. Замер начинался после львиной доли работы.
+   *
+   * Страница `/status` показывает эту метрику публично, поэтому важно,
+   * чтобы она мерила именно «от файла до готового КП», а не время
+   * сохранения в базу.
+   */
+  startedAt: number,
 ): Promise<NextResponse> {
   // Прайс берём организации-владельца сметы, а не «вообще»: сопоставление
   // идёт по его ценам. У новой организации прайса нет — тогда все строки
@@ -318,9 +342,19 @@ async function processAndRespond(
   const session = createSession(fileName, results);
   const id = createSessionId();
 
+  /**
+   * Время разбора и матчинга — от момента получения запроса.
+   *
+   * Считаем здесь, но точку отсчёта передал `POST`: разбор файла, извлечение
+   * строк и нормализация уже произошли к этому моменту, и начинать замер
+   * внутри этой функции значило бы измерять только матчинг (1 мс вместо
+   * трёх секунд).
+   */
+  const parseMs = Date.now() - startedAt;
+
   // Сохраняем ДО ответа: если БД недоступна, пользователь узнает об
   // ошибке сразу, а не получит «работающий» интерфейс с мёртвой сессией.
-  await saveSession(id, session, owner);
+  await saveSession(id, session, owner, parseMs);
 
   // Отдаём клиенту, но сессию на сервере тоже сохраняем: чат возьмёт
   // данные оттуда, а не из тела запроса — так их нельзя подменить.

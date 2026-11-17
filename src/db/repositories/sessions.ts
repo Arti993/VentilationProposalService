@@ -88,6 +88,14 @@ export async function saveSession(
   id: string,
   session: EstimateSession,
   owner: SessionOwner,
+  /**
+   * Сколько занял разбор и матчинг, мс.
+   *
+   * Необязателен, потому что не все вызывающие могут его посчитать
+   * (скрипты наполнения тестовых данных разбора не делают). У страницы
+   * `/status` это главная метрика, поэтому основной путь его передаёт.
+   */
+  parseMs?: number,
 ): Promise<void> {
   // Срок зависит от владельца: демо-данные убираем быстро, данные
   // организации живут, пока владелец их не удалит.
@@ -100,13 +108,13 @@ export async function saveSession(
         insert into estimates (
           id, name, total_sum, total_count, priced_count,
           not_found_count, needs_human_count, off_topic_count, expires_at,
-          org_id, created_by
+          org_id, created_by, parse_ms
         ) values (
           ${id}, ${session.name}, ${String(session.stats.totalSum)},
           ${session.stats.total}, ${session.stats.priced},
           ${session.stats.notFound}, ${session.stats.needsHuman},
           ${session.stats.offTopic}, ${expiresAt},
-          ${owner.orgId}, ${owner.userId ?? null}
+          ${owner.orgId}, ${owner.userId ?? null}, ${parseMs ?? null}
         )
       `;
     },
