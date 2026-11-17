@@ -59,10 +59,33 @@ export async function getActor(): Promise<Actor | null> {
 
   if (!session?.user) return null;
 
+  const isAnonymous =
+    (session.user as { isAnonymous?: boolean }).isAnonymous === true ||
+    (session.user.email ?? "").toLowerCase().endsWith("@anon.local");
+
   const orgId = await resolveOrganizationId(session.user.id, session.session.activeOrganizationId);
 
   /**
-   * Пользователь без организации.
+   * Гость живёт в демо-организации.
+   *
+   * Плагин anonymous создаёт пользователя без организации — так и
+   * задумано. Ему нужен демо-прайс и демо-сметы, иначе кнопка «попробовать
+   * без регистрации» показывает пустой экран, где ни одна позиция не
+   * находит цены. Работодатель, открывший ссылку из резюме, видит
+   * сервис без цен — то есть не видит сервиса.
+   */
+  if (!orgId && isAnonymous) {
+    return {
+      userId: session.user.id,
+      orgId: DEMO_ORG_ID,
+      role: "member",
+      isAnonymous: true,
+      email: session.user.email ?? null,
+    };
+  }
+
+  /**
+   * Пользователь с аккаунтом, но без организации.
    *
    * Такого быть не должно: при регистрации создаётся личная (см.
    * `lib/auth/organization.ts`). Но если это случится — возвращаем
@@ -82,7 +105,7 @@ export async function getActor(): Promise<Actor | null> {
       userId: session.user.id,
       orgId: "",
       role: "member",
-      isAnonymous: Boolean((session.user as { isAnonymous?: boolean }).isAnonymous),
+      isAnonymous,
       email: session.user.email ?? null,
     };
   }
@@ -93,7 +116,7 @@ export async function getActor(): Promise<Actor | null> {
     userId: session.user.id,
     orgId,
     role,
-    isAnonymous: Boolean((session.user as { isAnonymous?: boolean }).isAnonymous),
+    isAnonymous,
     email: session.user.email ?? null,
   };
 }

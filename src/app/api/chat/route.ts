@@ -176,7 +176,14 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     // getPrice передаём как функцию, а не результат вызова: прайс грузится
     // только если инструмент его реально потребует.
-    const agent = createAgent({ getPrice, useLlm: true }, { store });
+    //
+    // Организация зашита здесь, а не приходит из запроса: иначе, подставив
+    // чужой orgId, можно было бы заставить агента искать цены в чужом
+    // прайсе и пересказать их.
+    const agent = createAgent(
+      { getPrice: () => getPrice(viewerOrg), useLlm: true },
+      { store },
+    );
 
     const state = (await agent.invoke(
       {
