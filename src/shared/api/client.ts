@@ -38,7 +38,24 @@ export interface ChatResponse {
 }
 
 /**
- * Задаёт вопрос агенту.
+ * Шаг работы агента, пришедший по потоку.
+ *
+ * `status: "start"` — шаг начался (показать «смотрю прайс…»),
+ * `status: "done"` — закончился (показать галочку и время). Подпись
+ * (`label`) уже человекочитаемая и приходит с сервера: список шагов там
+ * же, где их имена, и клиенту не нужно держать второй справочник,
+ * который рано или поздно разойдётся с первым.
+ */
+export interface ChatStep {
+  id: string;
+  label: string;
+  status: "start" | "done";
+  /** Длительность шага в мс — только при `status: "done"` */
+  ms?: number;
+}
+
+/**
+ * Задаёт вопрос агенту и читает ответ потоком.
  *
  * ИСТОРИЯ ДИАЛОГА ЗДЕСЬ НЕ ПЕРЕДАЁТСЯ — и это не упущение.
  * Раньше браузер присылал прошлые реплики, и сервер заворачивал ответы
@@ -49,14 +66,30 @@ export interface ChatResponse {
  *
  * Клиент по-прежнему держит реплики в состоянии — чтобы показать их на
  * экране. Но это только отображение: на ответ агента они не влияют.
+ *
+ * ПОЧЕМУ ПОТОК
+ *
+ * Агент отвечает 4-8 секунд. Одним куском это значит «думаю…» всё это
+ * время — человек не понимает, работает система или повисла. Сервер
+ * отдаёт SSE-события: шаги («смотрю прайс») и финальный ответ. Здесь они
+ * разбираются и отдаются в `onStep`, а `askAgent` завершается, когда
+ * пришёл финальный ответ.
+ *
+ * `res.body` может оказаться `null` (старый браузер, обрыв до чтения) —
+ * тогда падаем с внятным текстом, а не молчаливо висим.
  */
 export async function askAgent(
   question: string,
-  options: { sessionId?: string; conversationId?: string } = {},
+  options: {
+    sessionId?: string;
+    conversationId?: string;
+    /** Вызывается на каждом шаге: «смотрю прайс», «готовлю ответ» */
+    onStep?: (step: ChatStep) => void;
+  } = {},
 ): Promise<ChatResponse> {
   const res = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({
       question,
       sessionId: options.sessionId,
@@ -64,12 +97,71 @@ export async function askAgent(
     }),
   });
 
-  const json = (await res.json()) as ChatResponse | ApiError;
-  if (!res.ok || !("ok" in json) || json.ok !== true) {
-    const msg = "error" in json ? json.error : `Ошибка чата (HTTP ${res.status})`;
-    throw new Error(msg);
+  /**
+   * Ошибки до старта потока (401/403/429/400) приходят обычным JSON.
+   * Поток начинается только после всех проверок, так что здесь их и
+   * ловим — иначе `getReader()` на JSON-ответе выдал бы мусор.
+   */
+  if (!res.ok || !res.headers.get("content-type")?.includes("text/event-stream")) {
+    const json = (await res.json().catch(() => ({}))) as Partial<ApiError>;
+    throw new Error(json.error ?? `Ошибка чата (HTTP ${res.status})`);
   }
-  return json;
+  if (!res.body) throw new Error("Сервер не прислал поток ответа");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ChatResponse | null = null;
+  let failure: string | null = null;
+
+  /**
+   * SSE-кадры разделены пустой строкой. Держим хвост в `buffer`: один
+   * кадр может прийти двумя кусками, и разбирать недописанный JSON —
+   * гарантированная ошибка.
+   */
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf("\n\n");
+
+      const event = /^event: (.+)$/m.exec(frame)?.[1];
+      const data = /^data: (.+)$/m.exec(frame)?.[1];
+      if (!event || !data) continue;
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        continue; // битый кадр пропускаем: следующий всё равно придёт
+      }
+
+      if (event === "step") {
+        options.onStep?.(parsed as ChatStep);
+      } else if (event === "done") {
+        const d = parsed as { ms: number; tokens: number; toolCalls: number; answer: string };
+        result = {
+          ok: true,
+          answer: d.answer,
+          toolCalls: d.toolCalls,
+          ms: d.ms,
+          tokens: d.tokens,
+        };
+      } else if (event === "error") {
+        failure = (parsed as { message?: string }).message ?? "Неизвестная ошибка";
+      }
+    }
+  }
+
+  if (failure) throw new Error(failure);
+  if (!result) throw new Error("Поток завершился без ответа");
+  return result;
 }
 
 /**

@@ -7,9 +7,9 @@
  * данные берутся на сервере. Поэтому подменить цены в запросе нельзя.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Send, Loader2, Sparkles, Bot, User } from "lucide-react";
+import { Send, Loader2, Sparkles, Bot, User, Check } from "lucide-react";
 import { cn } from "@shared/lib/cn";
-import { askAgent } from "@shared/api/client";
+import { askAgent, type ChatStep } from "@shared/api/client";
 
 interface ChatPanelProps {
   sessionId?: string;
@@ -79,11 +79,13 @@ export function ChatPanel({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Шаги текущего ответа: «смотрю прайс», «готовлю ответ» */
+  const [steps, setSteps] = useState<ChatStep[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, busy]);
+  }, [messages, busy, steps]);
 
   const send = useCallback(
     async (question: string) => {
@@ -93,17 +95,35 @@ export function ChatPanel({
       setError(null);
       setInput("");
       setMessages((m) => [...m, { role: "user", text: q }]);
+      setSteps([]);
       setBusy(true);
 
       try {
         // История на сервере: он читает её по conversationId и сам решает,
         // что показать модели. Браузер присылает только новые слова.
-        const res = await askAgent(q, { sessionId, conversationId: sessionId });
+        const res = await askAgent(q, {
+          sessionId,
+          conversationId: sessionId,
+          /**
+           * Шаг приходит дважды: `start` и `done`. Обновляем запись по
+           * `id`, а не добавляем новую — иначе список превратился бы в
+           * пары «смотрю прайс / смотрю прайс ✓».
+           */
+          onStep: (step) =>
+            setSteps((prev) => {
+              const i = prev.findIndex((s) => s.id === step.id);
+              if (i === -1) return [...prev, step];
+              const next = [...prev];
+              next[i] = step;
+              return next;
+            }),
+        });
         setMessages((m) => [...m, { role: "assistant", text: res.answer, ms: res.ms }]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка чата");
       } finally {
         setBusy(false);
+        setSteps([]);
       }
     },
     [busy, sessionId],
@@ -188,9 +208,45 @@ export function ChatPanel({
             <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-lg bg-accent-50 ring-1 ring-inset ring-accent-600/10">
               <Bot className="h-3.5 w-3.5 text-accent-600" aria-hidden />
             </div>
-            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-500" />
-              <span className="text-sm text-slate-500">Думаю…</span>
+            <div className="rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              {/**
+               * Шаги вместо «Думаю…».
+               *
+               * Агент отвечает 4-8 секунд, и всё это время одно слово
+               * «Думаю…» ничего не сообщало: непонятно, работает система
+               * или повисла. Теперь видно, что происходит прямо сейчас.
+               * Если шагов ещё нет (первый байт не пришёл) — возвращаемся
+               * к спиннеру, чтобы не показывать пустой блок.
+               */}
+              {steps.length === 0 ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-500" />
+                  <span className="text-sm text-slate-500">Думаю…</span>
+                </div>
+              ) : (
+                <ul className="space-y-1.5" aria-live="polite">
+                  {steps.map((s) => (
+                    <li key={s.id} className="flex items-center gap-2 text-sm">
+                      {s.status === "done" ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
+                      ) : (
+                        <Loader2
+                          className="h-3.5 w-3.5 shrink-0 animate-spin text-accent-500"
+                          aria-hidden
+                        />
+                      )}
+                      <span className={s.status === "done" ? "text-slate-500" : "text-slate-700"}>
+                        {s.label}
+                      </span>
+                      {s.ms !== undefined && (
+                        <span className="text-2xs text-slate-400">
+                          {(s.ms / 1000).toFixed(1)} с
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         )}

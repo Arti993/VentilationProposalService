@@ -16,7 +16,20 @@
  */
 import { NextResponse } from "next/server";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import { createAgent, finalText, type AgentStateType } from "@/lib/agent/graph";
+import {
+  createAgent,
+  finalText,
+  streamAgent,
+  type AgentStateType,
+} from "@/lib/agent/graph";
+import {
+  SSE_HEADERS,
+  STEP_LABELS,
+  countToolCalls,
+  send,
+  tokensFromMessages,
+  type DoneEvent,
+} from "./stream";
 import { SessionStore } from "@/lib/agent/session";
 import { configureTracingLogs, sessionTags } from "@/lib/agent/tracing";
 import { consume, clientKey, recordTokens } from "@/lib/limits/usage";
@@ -91,7 +104,15 @@ function tokensFromState(state: AgentStateType): { input: number; output: number
   return { input, output };
 }
 
-export async function POST(req: Request): Promise<NextResponse> {
+/**
+ * Возвращает то `Response`, то `NextResponse` — и это нормально.
+ *
+ * Поток отдаётся обычным `Response` (у `NextResponse` нет конструктора для
+ * `ReadableStream`, а оборачивать поток ради типа значит дублировать
+ * заголовки). Ошибки — `NextResponse.json`, у которых есть `cookies`.
+ * Общий тип поэтому `Response`: он родитель для обоих.
+ */
+export async function POST(req: Request): Promise<Response> {
   const t0 = Date.now();
 
   try {
@@ -185,47 +206,97 @@ export async function POST(req: Request): Promise<NextResponse> {
       { store },
     );
 
-    const state = (await agent.invoke(
-      {
-        messages: [...historyToMessages(history), new HumanMessage(question)],
-      },
-      sessionTags("chat", {
-        hasEstimate: hasEstimate ? "with-estimate" : "no-estimate",
-        hasHistory: history.length > 0 ? "with-history" : "first-turn",
-      }),
-    )) as AgentStateType;
-
-    const answer = finalText(state);
-
-    const toolCalls = state.messages.filter(
-      (m) =>
-        Array.isArray((m as { tool_calls?: unknown[] }).tool_calls) &&
-        ((m as { tool_calls?: unknown[] }).tool_calls?.length ?? 0) > 0,
-    ).length;
-
-    // ── Ответ записываем в историю ────────────────────────
-    await appendMessage({
-      conversationId,
-      estimateId: body.sessionId ?? null,
-      role: "assistant",
-      text: answer,
-      toolCalls,
+    const messages = [...historyToMessages(history), new HumanMessage(question)];
+    const tags = sessionTags("chat", {
+      hasEstimate: hasEstimate ? "with-estimate" : "no-estimate",
+      hasHistory: history.length > 0 ? "with-history" : "first-turn",
     });
 
-    // ── Токены — после ответа: до вызова их число неизвестно ─
-    const tokens = tokensFromState(state);
-    await recordTokens(ip, tokens.input, tokens.output);
+    /**
+     * ПОТОКОВЫЙ ОТВЕТ.
+     *
+     * Клиент получает шаги по мере работы агента, а не «думаю…» на все
+     * 4-8 секунд. Запись в историю, tokens и лимиты делаются ЗДЕСЬ, в
+     * `start` потока, а не до его возврата: `ReadableStream` начинает
+     * работать только когда ответ уже отдан клиенту, и это ровно то
+     * место, где фоновая запись не задерживает первый байт.
+     *
+     * `finalAnswer` нужен снаружи `start`, чтобы замыкание ниже записало
+     * в историю именно то, что увидел пользователь.
+     */
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let answer = "";
+        let toolCalls = 0;
+        let tokens = { input: 0, output: 0 };
 
-    return NextResponse.json(
-      {
-        ok: true,
-        answer,
-        toolCalls,
-        ms: Date.now() - t0,
-        tokens: tokens.input + tokens.output,
+        try {
+          let lastState: AgentStateType | undefined;
+
+          for await (const event of streamAgent(agent, { messages }, tags, (node, phase, ms) => {
+            /**
+             * Наружу идут только узлы из `STEP_LABELS`. `guard` и `tools`
+             * — внутренняя механика: проверка вопроса и вызов
+             * инструмента не должны выглядеть как работа пользователя.
+             *
+             * Шаг `agent` приходит дважды (до и после `tools`) — клиент
+             * обновляет запись по `id`, поэтому в списке он остаётся
+             * одним, но с временем завершения.
+             */
+            const label = STEP_LABELS[node];
+            if (!label) return;
+            send(controller, "step", { id: node, label, status: phase, ms });
+          })) {
+            if (event.state?.messages) lastState = event.state;
+          }
+
+          if (lastState) {
+            answer = finalText(lastState);
+            toolCalls = countToolCalls(lastState);
+            tokens = tokensFromMessages(lastState.messages);
+          }
+
+          send(controller, "done", {
+            ms: Date.now() - t0,
+            tokens: tokens.input + tokens.output,
+            toolCalls,
+            answer,
+          } satisfies DoneEvent);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[api/chat] поток", msg);
+          send(controller, "error", { message: `Не удалось получить ответ: ${msg}` });
+        } finally {
+          controller.close();
+
+          /**
+           * Запись в историю — ПОСЛЕ закрытия потока.
+           *
+           * Пользователь уже увидел ответ; задерживать его ради записи в
+           * базу незачем. Если запись не удастся, ответ всё равно
+           * останется верным — потеряется только контекст следующего
+           * вопроса, и это меньшее зло, чем сорванный ответ.
+           */
+          if (answer) {
+            void appendMessage({
+              conversationId,
+              estimateId: body.sessionId ?? null,
+              role: "assistant",
+              text: answer,
+              toolCalls,
+            }).catch((e: unknown) => {
+              console.error("[api/chat] история", e instanceof Error ? e.message : e);
+            });
+          }
+
+          void recordTokens(ip, tokens.input, tokens.output).catch((e: unknown) => {
+            console.error("[api/chat] токены", e instanceof Error ? e.message : e);
+          });
+        }
       },
-      { headers: limit.headers },
-    );
+    });
+
+    return new Response(stream, { headers: { ...SSE_HEADERS, ...limit.headers } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/chat]", msg);

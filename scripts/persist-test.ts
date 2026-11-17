@@ -14,6 +14,7 @@
  * Запуск: node scripts/persist-test.ts <save|check> [base-url]
  */
 import fs from "node:fs";
+import { readChatStream } from "./chatStream.ts";
 import path from "node:path";
 
 const mode = process.argv[2] ?? "save";
@@ -57,19 +58,18 @@ async function check(): Promise<void> {
 
   const res = await fetch(`${BASE}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({
       question: "Какой итог по этой смете и сколько позиций без цены?",
       sessionId,
     }),
   });
 
-  const json = (await res.json()) as {
-    ok: boolean;
-    error?: string;
-    answer?: string;
-    toolCalls?: number;
-  };
+  /**
+   * Ответ приходит потоком SSE — читаем через общий разбор.
+   * `res.json()` на потоке падает с `Unexpected token 'e'`.
+   */
+  const json = await readChatStream(res);
 
   console.log("\nОТВЕТ СЕРВЕРА:");
   if (!json.ok) {
