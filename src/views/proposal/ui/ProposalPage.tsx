@@ -14,6 +14,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
 import { UploadEstimate } from "@features/upload-estimate";
+import { UploadPrice } from "@features/upload-price";
 import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
 import { SummaryCards } from "@widgets/estimate-summary";
@@ -129,6 +130,15 @@ export function ProposalPage() {
 
             <div className="card mt-8 animate-slide-up p-4 sm:mt-10 sm:p-8">
               <UploadEstimate onLoaded={setSession} />
+            </div>
+
+            {/*
+              Прайс — под загрузкой сметы и отдельной карточкой, а не
+              вкладкой: это настройка «один раз», а смета — ежедневная
+              работа. Сверху она мешала бы основному действию.
+            */}
+            <div className="mt-4">
+              <UploadPrice />
             </div>
 
             {/* Подсказка о форматах — снимает вопрос до загрузки */}

@@ -297,6 +297,39 @@ async function main(): Promise<void> {
   // ── 6. Изоляция смет (главная проверка) ─────────────────
   console.log("\n=== Изоляция данных между организациями ===");
 
+  /**
+   * Сначала прайс организации А.
+   *
+   * Без своего прайса новый клиент получает КП без позиций и без цены —
+   * API честно отвечает 422 «нет ни одной позиции с ценой». Проверять
+   * изоляцию на пустом КП бессмысленно: там нечего защищать. Поэтому
+   * сначала даём А цены, и только потом смотрим, что их не видит Б.
+   */
+  {
+    const XLSX = await import("xlsx");
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Наименование", "Цена"],
+      ["Воздуховод круглый 315", 1200],
+      ["Тройник 315/200", 3400],
+    ]);
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Прайс");
+    const buf = XLSX.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const priceForm = new FormData();
+    priceForm.append("file", new Blob([buf]), "price.xlsx");
+
+    const priceRes = await withCookie(
+      "/api/price/upload",
+      { method: "POST", body: priceForm },
+      userA.cookie,
+    );
+    if (priceRes.ok) {
+      ok("А загрузил свой прайс", "2 позиции");
+    } else {
+      fail("А загрузил свой прайс", `HTTP ${priceRes.status}`);
+    }
+  }
+
   // Пользователь А загружает смету
   const uploadRes = await (async () => {
     const form = new FormData();

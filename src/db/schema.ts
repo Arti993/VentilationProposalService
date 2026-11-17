@@ -97,7 +97,17 @@ export const priceItems = pgTable(
     orgId: text("org_id"),
   },
   (t) => [
-    uniqueIndex("price_items_code_uq").on(t.code),
+    /**
+     * Код позиции уникален ВНУТРИ организации, а не глобально.
+     *
+     * Раньше индекс был по одному `code`. Пока прайс был один (демо), это
+     * работало. С загрузкой своих прайсов стало ломаться: у второго
+     * клиента позиция тоже получает код `p001`, и вставка падала с
+     * `duplicate key value violates unique constraint`. То есть второй
+     * клиент вообще не мог загрузить прайс, а причина — наш индекс, а не
+     * его файл.
+     */
+    uniqueIndex("price_items_org_code_uq").on(t.orgId, t.code),
     index("price_items_type_dims_idx").on(t.type, t.dimsKey),
     index("price_items_org_idx").on(t.orgId),
   ],

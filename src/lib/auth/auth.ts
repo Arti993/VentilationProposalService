@@ -139,8 +139,30 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (createdUser) => {
-          // Анонимам организацию не создаём: они работают в демо-прайсе
-          if (createdUser.isAnonymous) return;
+          /**
+           * Анонимам организацию не создаём: они работают в демо-прайсе.
+           *
+           * ЗАЧЕМ ИМЕННО ТАК
+           *
+           * Первая версия проверяла `createdUser.isAnonymous`. На проверке
+           * выяснилось, что у анонимов это поле приходит `null`, а не
+           * `true` — условие не срабатывало, и гость получал ЛИЧНУЮ
+           * организацию. Последствия:
+           *
+           *  - `isDemoOrg` возвращал false, и защита демо-прайса не
+           *    включалась: гость мог загрузить свой прайс (проверка
+           *    `test-price.ts` это поймала);
+           *  - демо-сметы переставали быть видны другим гостям;
+           *  - каждый заход плодил организацию в базе.
+           *
+           * Поэтому смотрим на домен почты из плагина anonymous: он
+           * задан явно (`anon.local`) и не зависит от того, как плагин
+           * проставляет флаг.
+           */
+          const email = (createdUser.email ?? "").toLowerCase();
+          const isAnonymous =
+            createdUser.isAnonymous === true || email.endsWith("@anon.local");
+          if (isAnonymous) return;
 
           try {
             await ensurePersonalOrganization(createdUser.id, createdUser.name);
