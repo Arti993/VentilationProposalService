@@ -45,21 +45,49 @@ async function ask(question: string, sessionId?: string): Promise<void> {
   const t0 = Date.now();
   const res = await fetch(`${BASE}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ question, sessionId }),
   });
-  const json = (await res.json()) as {
-    ok: boolean;
-    error?: string;
-    answer?: string;
-    toolCalls?: number;
-  };
+
+  /**
+   * Ответ приходит потоком SSE: шаги и финальный `done`.
+   *
+   * Здесь читаем текст целиком и берём последний кадр `done` — скрипту
+   * нужен итоговый ответ, а не таймлайн. Разбор нарочно простой:
+   * `res.json()` на потоке падает с `Unexpected token 'e'`, и это
+   * ровно та ошибка, которая была до правки.
+   */
+  const body = await res.text();
+  const doneFrame = body
+    .split("\n\n")
+    .filter((f) => f.startsWith("event: done"))
+    .pop();
+  const errorFrame = body
+    .split("\n\n")
+    .filter((f) => f.startsWith("event: error"))
+    .pop();
 
   console.log(`\nВОПРОС: ${question}`);
-  if (!json.ok) {
-    console.log(`  ОШИБКА: ${json.error}`);
+
+  if (errorFrame) {
+    const data = /^data: (.+)$/m.exec(errorFrame)?.[1];
+    console.log(`  ОШИБКА: ${data ? (JSON.parse(data) as { message: string }).message : "?"}`);
     return;
   }
+  if (!doneFrame) {
+    console.log(`  ОШИБКА: поток завершился без ответа (HTTP ${res.status})`);
+    return;
+  }
+
+  const raw = /^data: (.+)$/m.exec(doneFrame)?.[1];
+  const json = raw
+    ? (JSON.parse(raw) as { answer: string; toolCalls: number; ms: number })
+    : null;
+  if (!json) {
+    console.log("  ОШИБКА: не удалось разобрать кадр done");
+    return;
+  }
+
   console.log(`  ОТВЕТ: ${json.answer}`);
   console.log(`  (инструментов: ${json.toolCalls}, ${Date.now() - t0} мс)`);
 }

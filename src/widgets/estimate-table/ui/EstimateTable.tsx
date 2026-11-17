@@ -4,12 +4,22 @@ import { useMemo, useState } from "react";
 import { ArrowDownUp, Download, Info, Search } from "lucide-react";
 import { cn, formatMoney, formatNumber } from "@shared/lib/cn";
 import { StatusBadge } from "@entities/estimate/ui/StatusBadge";
+import { ReviewMatch } from "@features/review-match";
 import type { EstimatePosition, PositionStatus } from "@entities/estimate/model/types";
+import type { PriceItem } from "@features/upload-price/api/client";
 
 interface EstimateTableProps {
   positions: EstimatePosition[];
   /** Клик по позиции — например, чтобы спросить агента про неё */
   onSelect?: (pos: EstimatePosition) => void;
+  /**
+   * Прайс организации. Нужен только для разбора спорных строк: чтобы
+   * подсказать менеджеру, из чего выбирать. Если не передан, разбор не
+   * показывается — таблица продолжает работать без него.
+   */
+  price?: PriceItem[];
+  /** Смета, к которой относятся позиции: связывает разбор с КП */
+  estimateId?: string;
 }
 
 type Filter = "all" | "priced" | "problems";
@@ -45,7 +55,12 @@ const FILTERS: Array<{ key: Filter; label: string; test: (s: PositionStatus) => 
  * Карточка держит название, количество, статус и сумму в одном блоке.
  * Данные те же, меняется только раскладка.
  */
-export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
+export function EstimateTable({
+  positions,
+  onSelect,
+  price,
+  estimateId,
+}: EstimateTableProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const [sortBySum, setSortBySum] = useState(false);
   const [query, setQuery] = useState("");
@@ -174,10 +189,16 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
       <ul className="divide-y divide-slate-100 sm:hidden">
         {visible.map((p) => (
           <li key={p.posNo}>
+            {/**
+             * Кнопка выбора и блок разбора — СОСЕДИ, а не вложены друг в
+             * друга. Вложенная кнопка недопустима в HTML (браузер
+             * «расклеит» её), и клик по «подсказать позицию» заодно
+             * спрашивал бы агента про эту же строку.
+             */}
             <button
               type="button"
               onClick={() => onSelect?.(p)}
-              className="w-full px-3 py-3 text-left transition-colors hover:bg-accent-50/40"
+              className="w-full px-3 pb-1.5 pt-3 text-left transition-colors hover:bg-accent-50/40"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-slate-900">
@@ -212,6 +233,13 @@ export function EstimateTable({ positions, onSelect }: EstimateTableProps) {
                 <p className="mt-1 text-2xs leading-relaxed text-slate-500">{p.reason}</p>
               )}
             </button>
+
+            {/* Разбор — только для строк без цены: именно там нужен человек */}
+            {price && price.length > 0 && p.status !== "priced" && p.status !== "off_topic" && (
+              <div className="px-3 pb-3">
+                <ReviewMatch position={p} price={price} estimateId={estimateId} />
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -27,7 +27,7 @@ import { waitUntil } from "@vercel/functions";
 import { getActor, denied } from "@/lib/auth/guard.ts";
 import { isDemoOrg } from "@/lib/auth/org.ts";
 import { parsePriceWorkbook, describeQuality } from "@/lib/price/parse.ts";
-import { replacePrice, countPrice } from "@/db/repositories/price.ts";
+import { replacePrice, countPrice, loadPrice } from "@/db/repositories/price.ts";
 import { indexPriceInBackground } from "@/db/repositories/priceIndex.ts";
 
 export const runtime = "nodejs";
@@ -213,8 +213,17 @@ export async function POST(request: Request) {
  * Нужно кабинету: показать «в прайсе 215 позиций» и дату, когда его
  * загружали. Отдельный GET, а не часть ответа на загрузку — иначе
  * кабинет не узнает состояние прайса, не загружая файл заново.
+ *
+ * `?withItems=1` добавляет сами позиции. Это нужно разбору спорных строк:
+ * менеджер подтверждает «какой позиции прайса соответствует эта строка»,
+ * и выбирать ему надо из настоящего прайса организации, а не из демо.
+ *
+ * ПОЧЕМУ ФЛАГОМ, А НЕ ВСЕГДА
+ *
+ * 215 позиций — это ~40 КБ JSON. Кабинету они не нужны, а платить за
+ * передачу при каждом открытии не стоит. Флаг делает выбор явным.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await getActor();
   if (!actor) {
     const d = denied(actor);
@@ -224,6 +233,30 @@ export async function GET() {
   const orgId = actor.orgId;
   if (!orgId) {
     return NextResponse.json({ ok: true, total: 0, isDemo: false });
+  }
+
+  const withItems = new URL(request.url).searchParams.get("withItems") === "1";
+
+  if (withItems) {
+    /**
+     * `loadPrice` кэшируется в памяти функции на 5 минут (см. price.ts),
+     * поэтому повторные открытия списка не бьют в базу. Организация
+     * берётся из сессии, а не из запроса: подставив чужой orgId, можно
+     * было бы выгрузить чужой прайс — то есть цены поставщика конкурента.
+     */
+    const items = await loadPrice(orgId);
+    return NextResponse.json({
+      ok: true,
+      total: items.length,
+      isDemo: isDemoOrg(orgId),
+      items: items.map((p) => ({
+        id: p.id,
+        rawName: p.rawName,
+        price: p.price,
+        type: p.type,
+        dims: p.dims,
+      })),
+    });
   }
 
   const total = await countPrice(orgId);
