@@ -28,6 +28,8 @@ import {
   parseWord,
 } from "@/lib/estimate/binary.ts";
 import { processRows } from "@/lib/matcher/hybrid.ts";
+import { appliedSynonyms } from "@/db/repositories/matchFeedback.ts";
+import { buildSynonymTable, rewriteWithSynonym } from "@/lib/matcher/synonyms.ts";
 import { createSession } from "@/lib/agent/session.ts";
 import { clientKey, consume, pruneOldCounters } from "@/lib/limits/usage";
 import { getActor, viewerOrganization } from "@/lib/auth/guard";
@@ -258,7 +260,60 @@ async function processAndRespond(
   // идёт по его ценам. У новой организации прайса нет — тогда все строки
   // получат «нет в прайсе», и это честный ответ.
   const price = await getPrice(owner.orgId);
-  const results = await processRows(rows, price, { concurrency: 3 });
+
+  /**
+   * Синонимы организации из обратной связи менеджера.
+   *
+   * Менеджер уже разбирал похожие строки и подтвердил пары «как написал
+   * клиент → позиция прайса». Применяем их ДО матчинга: строка
+   * переписывается на название из прайса, и детерминированный матчинг
+   * находит цену сам, без модели.
+   *
+   * Почему до, а не после: после матчинга строка уже получила статус
+   * `not_found` или `needs_human`, и «дотягивать» её значит спорить с
+   * результатом. Переписывание на входе — не спор, а уточнение входа.
+   *
+   * Ошибка чтения синонимов не должна ломать загрузку сметы: словарь —
+   * улучшение, а не обязательное условие. Пустой словарь = работа как
+   * раньше.
+   */
+  let rowsForMatch = rows;
+  try {
+    const synonyms = await appliedSynonyms(owner.orgId);
+    if (synonyms.length > 0) {
+      const table = buildSynonymTable(synonyms);
+      const names = new Map(price.map((p) => [p.id, p.rawName]));
+      /**
+       * Размеры позиций нужны, чтобы не дублировать их в названии.
+       * Без этой карты строка «Воздуховод спиральный 315» превращалась в
+       * «Воздуховод спирально-навивной 315, м.п. 315», и разбор принимал
+       * второй «315» за количество.
+       */
+      const dims = new Map(price.map((p) => [p.id, p.dims]));
+
+      let rewritten = 0;
+      rowsForMatch = rows.map((r) => {
+        const { text, code } = rewriteWithSynonym(r.name, table, names, dims);
+        if (code && text !== r.name) {
+          rewritten += 1;
+          return { ...r, name: text };
+        }
+        return r;
+      });
+
+      if (rewritten > 0) {
+        console.log(`[estimate] синонимы: переписано ${rewritten} из ${rows.length}`);
+      }
+    }
+  } catch (e) {
+    // Не падаем: смета важнее словаря
+    console.error(
+      "[estimate] синонимы недоступны:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  const results = await processRows(rowsForMatch, price, { concurrency: 3 });
 
   const session = createSession(fileName, results);
   const id = createSessionId();

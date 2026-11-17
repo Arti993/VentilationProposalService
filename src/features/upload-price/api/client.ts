@@ -6,6 +6,23 @@
  * транспорт (например, на прямую загрузку в хранилище) и не трогать UI.
  */
 
+/**
+ * Позиция прайса в том виде, в каком она приходит для выбора в интерфейсе.
+ *
+ * Обрезанная копия `PriceItem` из `lib/price/normalize`: клиенту нужны
+ * только код, название, цена и размеры. Служебные поля (угол, исполнение,
+ * что не разобралось при разборе файла) наружу не отдаются — они ничего
+ * не значат для менеджера, который выбирает позицию, и раздувают ответ
+ * втрое.
+ */
+export interface PriceItem {
+  id: string;
+  rawName: string;
+  price: number;
+  type: string;
+  dims: number[];
+}
+
 export interface PriceUploadSuccess {
   ok: true;
   fileName: string;
@@ -70,5 +87,22 @@ export async function fetchPriceInfo(): Promise<PriceInfo> {
     return (await res.json()) as PriceInfo;
   } catch {
     return { ok: false, total: 0, isDemo: false };
+  }
+}
+
+/**
+ * Позиции прайса организации — для выбора в разборе спорных строк.
+ *
+ * Возвращает пустой массив при любой ошибке, а не бросает исключение:
+ * разбор — вспомогательная функция. Если прайс не загрузился, таблица КП
+ * должна работать как раньше, просто без подсказки «из чего выбрать».
+ */
+export async function fetchPriceItems(): Promise<PriceItem[]> {
+  try {
+    const res = await fetch("/api/price/upload?withItems=1", { cache: "no-store" });
+    const json = (await res.json()) as { ok?: boolean; items?: PriceItem[] };
+    return json.ok && Array.isArray(json.items) ? json.items : [];
+  } catch {
+    return [];
   }
 }
