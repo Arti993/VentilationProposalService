@@ -16,6 +16,9 @@ const COLUMNS = [
       { href: "#features", label: "Возможности" },
       { href: "#precision", label: "Точность" },
       { href: "#faq", label: "Вопросы" },
+      // Метрики — не украшение: это единственный способ проверить
+      // слова «работает точно» числами, а не обещанием
+      { href: "/status", label: "Как работает сервис в цифрах" },
     ],
   },
   {
@@ -75,7 +78,8 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-2 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-relaxed text-slate-500">
-            Демонстрационный проект. Прайс — вентиляционное оборудование.
+            Подключён демо-прайс по вентиляционному оборудованию. Загрузите свой
+            прайс — сметы будут считаться по вашим ценам.
           </p>
           <p className="text-xs text-slate-500">
             © {new Date().getFullYear()} Расчёт стоимости
