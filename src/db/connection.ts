@@ -181,6 +181,13 @@ async function acquire(forceNew: boolean): Promise<ReturnType<typeof postgres>> 
  * heavy: true — запрос большого объёма (например, с вектором на 7.6 КБ).
  * Такой запрос «съедает» соединение целиком: второй подряд рвётся. Для
  * тяжёлых соединение открывается заново каждый раз.
+ *
+ * timeoutMs — свой предел ожидания для конкретного запроса. Нужен там, где
+ * 3 секунды заведомо мало, а поднимать общий лимит нельзя: тогда обычные
+ * запросы начнут ждать 20 секунд вместо быстрого повтора. Пример — запись
+ * вектора pgvector: строка на 7.6 КБ пишется дольше трёх секунд, и
+ * `QUERY_TIMEOUT` срабатывал на здоровом запросе, после чего повтор
+ * упирался в тот же предел.
  */
 export async function withRetry<T>(
   fn: (sql: ReturnType<typeof postgres>) => Promise<T>,
@@ -188,7 +195,13 @@ export async function withRetry<T>(
     retries = 3,
     label = "запрос",
     heavy = false,
-  }: { retries?: number; label?: string; heavy?: boolean } = {},
+    timeoutMs = QUERY_TIMEOUT_MS,
+  }: {
+    retries?: number;
+    label?: string;
+    heavy?: boolean;
+    timeoutMs?: number;
+  } = {},
 ): Promise<T> {
   let lastError: unknown;
 
@@ -203,8 +216,8 @@ export async function withRetry<T>(
         fn(sql),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
-            () => reject(new Error(`QUERY_TIMEOUT: ${label} не ответил за ${QUERY_TIMEOUT_MS}мс`)),
-            QUERY_TIMEOUT_MS,
+            () => reject(new Error(`QUERY_TIMEOUT: ${label} не ответил за ${timeoutMs}мс`)),
+            timeoutMs,
           );
         }),
       ]);

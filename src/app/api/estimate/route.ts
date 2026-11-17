@@ -254,7 +254,10 @@ async function processAndRespond(
   headers: Record<string, string>,
   owner: SessionOwner,
 ): Promise<NextResponse> {
-  const price = await getPrice();
+  // Прайс берём организации-владельца сметы, а не «вообще»: сопоставление
+  // идёт по его ценам. У новой организации прайса нет — тогда все строки
+  // получат «нет в прайсе», и это честный ответ.
+  const price = await getPrice(owner.orgId);
   const results = await processRows(rows, price, { concurrency: 3 });
 
   const session = createSession(fileName, results);
