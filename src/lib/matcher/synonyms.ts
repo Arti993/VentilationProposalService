@@ -41,6 +41,19 @@ export interface SynonymTable {
   byPhrase: Map<string, string>;
   /** Длина самой длинной фразы: чтобы не перебирать заведомо длинные */
   maxLength: number;
+  /**
+   * Формулировки, по которым менеджеры подтвердили РАЗНЫЕ коды.
+   *
+   * Такие фразы в словарь не попадают: если один менеджер сказал «это
+   * p065», а другой «это p066», то непонятно, кто прав, и переписывать
+   * строку по одному из них — значит ставить цену наугад.
+   *
+   * Конфликт не молчит: он возвращается наружу, чтобы попасть в лог или
+   * в интерфейс. Раньше «первое подтверждение выигрывало», и второй
+   * разбор просто терялся — менеджер видел свой ответ сохранённым, а
+   * система его игнорировала.
+   */
+  conflicts: { phrase: string; codes: string[] }[];
 }
 
 /**
@@ -62,20 +75,50 @@ const MIN_PHRASE_LENGTH = 4;
 
 export function buildSynonymTable(synonyms: Synonym[]): SynonymTable {
   const byPhrase = new Map<string, string>();
+  /**
+   * Все коды по формулировке — чтобы поймать противоречие.
+   *
+   * Нужен отдельный список, а не проверка `byPhrase.get(phrase) !== code`:
+   * формулировка могла встретиться дважды с ОДИНАКОВЫМ кодом (менеджеры
+   * в разных сметах подтвердили одно и то же), и это не конфликт.
+   */
+  const codesByPhrase = new Map<string, Set<string>>();
+  const conflicts: { phrase: string; codes: string[] }[] = [];
   let maxLength = 0;
 
   for (const s of synonyms) {
     const phrase = s.rawText.trim().toLowerCase().replace(/\s+/g, " ");
     if (phrase.length < MIN_PHRASE_LENGTH) continue;
-    // Первое подтверждение выигрывает: если по одной формулировке есть два
-    // разных кода, порядок прихода из БД стабилен (order by raw_text), и
-    // результат воспроизводим. Молча брать последний значило бы зависеть
-    // от порядка строк.
-    if (!byPhrase.has(phrase)) byPhrase.set(phrase, s.code);
+
+    let codes = codesByPhrase.get(phrase);
+    if (!codes) {
+      codes = new Set();
+      codesByPhrase.set(phrase, codes);
+    }
+    codes.add(s.code);
+
     maxLength = Math.max(maxLength, phrase.length);
   }
 
-  return { byPhrase, maxLength };
+  for (const [phrase, codes] of codesByPhrase) {
+    if (codes.size === 1) {
+      // Обычный случай: формулировка однозначно ведёт к одной позиции
+      byPhrase.set(phrase, [...codes][0]);
+      continue;
+    }
+
+    /**
+     * Конфликт: разные менеджеры выбрали разные позиции.
+     *
+     * Не выбираем «первый попавшийся» — вместо этого фразу исключаем из
+     * словаря. Строка тогда пойдёт обычным путём (матчинг, затем
+     * RAG/LLM, затем человек), и цена не будет поставлена по спорному
+     * правилу. Ошибка станет видна в `conflicts`, а не спрячется.
+     */
+    conflicts.push({ phrase, codes: [...codes].sort() });
+  }
+
+  return { byPhrase, maxLength, conflicts };
 }
 
 /**
