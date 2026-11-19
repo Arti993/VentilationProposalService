@@ -51,6 +51,14 @@ export interface PriceUploadFailure {
   error: string;
   /** Что делать — конкретно. Показываем мелко под ошибкой. */
   hint?: string;
+  /**
+   * Отказ из-за отсутствия аккаунта.
+   *
+   * Признак приходит с сервера, а не выводится из текста: различать
+   * причины по формулировке — значит сломать интерфейс при первой же
+   * правке сообщения. По этому флагу показывается кнопка «Войти».
+   */
+  needAuth?: boolean;
 }
 
 export type PriceUploadResult = PriceUploadSuccess | PriceUploadFailure;
