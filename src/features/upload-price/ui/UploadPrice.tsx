@@ -20,7 +20,8 @@
  */
 
 import { useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, LogIn, Upload } from "lucide-react";
 import { uploadPrice, type PriceUploadResult } from "../api/client";
 
 interface Props {
@@ -185,6 +186,24 @@ export function UploadPrice({ onUploaded }: Props) {
               <p className="mt-1.5 pl-6 text-sm leading-relaxed text-slate-700">
                 {phase.result.hint}
               </p>
+            )}
+            {/*
+              Ссылка на вход прямо из ошибки.
+
+              Раньше здесь был только текст «Войдите или зарегистрируйтесь»,
+              и человек читал совет, по которому нельзя кликнуть. Страница
+              /login существовала, но путь к ней из интерфейса отсутствовал
+              вовсе — это и была настоящая причина, почему вход «не
+              находился».
+            */}
+            {phase.result.needAuth && (
+              <Link
+                href="/login"
+                className="btn-primary mt-3 ml-6 inline-flex items-center gap-1.5 px-3.5 py-2 text-sm"
+              >
+                <LogIn className="h-4 w-4" aria-hidden />
+                Войти или зарегистрироваться
+              </Link>
             )}
             <button type="button" className="btn-secondary mt-3" onClick={reset}>
               Выбрать другой файл

@@ -18,6 +18,7 @@ import { UploadPrice, fetchPriceItems } from "@features/upload-price";
 import type { PriceItem } from "@features/upload-price/api/client";
 import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
+import { AuthButton } from "@features/auth";
 import { SummaryCards } from "@widgets/estimate-summary";
 import { EstimateTable } from "@widgets/estimate-table";
 import { Logo } from "@shared/ui/Logo";
@@ -25,7 +26,18 @@ import type { EstimateSession, EstimatePosition } from "@entities/estimate/model
 
 type Session = EstimateSession & { id: string };
 
-export function ProposalPage() {
+export interface ProposalPageProps {
+  /**
+   * Кто пришёл — известно на сервере (`/app` читает сессию).
+   *
+   * `null` — гость. Передаётся пропсом, а не запрашивается в браузере:
+   * иначе кнопка «Войти» появлялась бы через полсекунды, и человек,
+   * ищущий вход, успевал решить, что его нет.
+   */
+  user: { email: string; isAnonymous: boolean } | null;
+}
+
+export function ProposalPage({ user }: ProposalPageProps) {
   const [session, setSession] = useState<Session | null>(null);
 
   /**
@@ -121,13 +133,23 @@ export function ProposalPage() {
                 </button>
               </>
             ) : (
-              // Ссылка на главную: на телефоне её нет слева, и без
               // этого из приложения некуда уйти, кроме кнопки браузера
               <Link href="/" className="btn-ghost !px-2.5 sm:hidden">
                 <ArrowLeft className="h-4 w-4" />
                 <span className="sr-only">На главную</span>
               </Link>
             )}
+
+            {/*
+              Вход и состояние пользователя — ВСЕГДА справа.
+
+              Раньше страница /login существовала, но ссылки на неё не было
+              нигде: человек получал «Войдите или зарегистрируйтесь» при
+              попытке загрузить свой прайс и не мог найти, где это сделать.
+              Кнопка стоит вне ветки `session` намеренно — вход нужен и до
+              загрузки сметы, и после.
+            */}
+            <AuthButton user={user} />
           </div>
         </div>
       </header>
