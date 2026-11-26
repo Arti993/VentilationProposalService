@@ -50,6 +50,65 @@ async function main() {
     console.log("  готово");
   }
 
+  // ── Ссылка на организацию ───────────────────────────────
+  /**
+   * Сироты убираются ПЕРЕД добавлением ключа.
+   *
+   * Без этого шага `alter table` упал бы на первой же строке удалённой
+   * организации — и миграция выглядела бы сломанной, хотя дело в мусоре,
+   * который эта же миграция и должна предотвратить.
+   */
+  const orphans = await withRetry(
+    async (sql) => {
+      const removed = await sql<{ org_id: string }[]>`
+        delete from price_meta pm
+         where not exists (select 1 from organization o where o.id = pm.org_id)
+        returning pm.org_id
+      `;
+      return removed;
+    },
+    { label: "уборка сирот", heavy: true, retries: 2 },
+  );
+  if (orphans.length > 0) {
+    console.log(`  удалено строк без организации: ${orphans.length}`);
+  }
+
+  /**
+   * Проверяем наличие ключа, прежде чем его добавлять.
+   *
+   * `drop constraint if exists` + `add constraint` в одном проходе
+   * безопасны, но при повторном запуске дают ошибку в логе от первого
+   * шага. Чистый повторный прогон важнее краткости: скрипт запускают
+   * руками, и «красная строка» в нём означает «надо разбираться».
+   */
+  const hasFk = await withRetry(
+    (sql) =>
+      sql<{ ok: boolean }[]>`
+        select exists (
+          select 1 from pg_constraint
+           where conname = 'price_meta_org_fk'
+             and conrelid = 'price_meta'::regclass
+        ) as ok
+      `,
+    { label: "проверка ключа" },
+  );
+
+  if (hasFk[0]?.ok) {
+    console.log("  ключ price_meta → organization уже есть");
+  } else {
+    await withRetry(
+      async (sql) => {
+        await sql`
+          alter table price_meta
+            add constraint price_meta_org_fk
+            foreign key (org_id) references organization(id) on delete cascade
+        `;
+      },
+      { label: "внешний ключ", heavy: true, retries: 2 },
+    );
+    console.log("  ключ price_meta → organization (cascade) добавлен");
+  }
+
   // ── Итог ─────────────────────────────────────────────────
   const cols = await withRetry(
     (sql) =>
