@@ -22,6 +22,7 @@
     "kp": "node --env-file=.env.local scripts/kp.ts",
     "agent": "node --env-file=.env.local scripts/agent.ts",
     "test:parse": "node scripts/test-parse.ts",
+    "test:account": "node --env-file=.env.local scripts/test-account.ts",
     "test:injection": "node --env-file=.env.local scripts/injection-test.ts",
     "test:injection-llm": "node --env-file=.env.local scripts/injection-llm.ts",
     "check": "node scripts/datasets/check.ts",

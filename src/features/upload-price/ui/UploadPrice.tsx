@@ -25,8 +25,26 @@ import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, LogIn, Upload } fr
 import { uploadPrice, type PriceUploadResult } from "../api/client";
 
 interface Props {
-  /** Вызывается после успешной загрузки: родитель обновит счётчик позиций. */
-  onUploaded?: () => void;
+  /**
+   * Вызывается после успешной загрузки.
+   *
+   * Передаём имя файла и число позиций: родитель показывает «прайс
+   * загружен: такой-то файл» и убирает блок загрузки. Без этих данных
+   * ему пришлось бы делать лишний запрос, чтобы узнать то, что уже
+   * пришло в ответе.
+   */
+  onUploaded?: (info: { fileName: string; inserted: number }) => void;
+  /**
+   * Как показывать.
+   *
+   * `card` — обычная карточка «Свой прайс» (кабинет, где замена прайса —
+   * осознанное действие).
+   *
+   * `notice` — предупреждение на экране расчёта: «прайса нет, считаем по
+   * тестовому». Там загрузка — не настройка, а снятие блокирующего
+   * предупреждения, поэтому и тон другой.
+   */
+  variant?: "card" | "notice";
 }
 
 type Phase =
@@ -42,9 +60,10 @@ function columnLabel(index: number | null): string {
   return `${index + 1}-я колонка`;
 }
 
-export function UploadPrice({ onUploaded }: Props) {
+export function UploadPrice({ onUploaded, variant = "card" }: Props) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const inputRef = useRef<HTMLInputElement>(null);
+  const isNotice = variant === "notice";
 
   /** Шаг 1: выбрали файл — показываем, что будем делать. */
   function onPick(event: React.ChangeEvent<HTMLInputElement>) {
@@ -59,7 +78,7 @@ export function UploadPrice({ onUploaded }: Props) {
     const result = await uploadPrice(file);
     if (result.ok) {
       setPhase({ kind: "done", result });
-      onUploaded?.();
+      onUploaded?.({ fileName: result.fileName, inserted: result.inserted });
     } else {
       setPhase({ kind: "failed", result });
     }
@@ -72,16 +91,42 @@ export function UploadPrice({ onUploaded }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      className={
+        isNotice
+          ? "rounded-2xl border border-amber-200 bg-amber-50/60 p-5"
+          : "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      }
+    >
       <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-slate-100 p-2 text-slate-600" aria-hidden>
+        <div
+          className={
+            isNotice
+              ? "rounded-xl bg-amber-100 p-2 text-amber-700"
+              : "rounded-xl bg-slate-100 p-2 text-slate-600"
+          }
+          aria-hidden
+        >
           <FileSpreadsheet className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-slate-900">Свой прайс</h2>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">
-            Загрузите прайс поставщика — сметы будут считаться по вашим ценам.
-            Подойдёт .xlsx, .xls или .csv с колонками «Наименование» и «Цена».
+          <h2 className="text-base font-semibold text-slate-900">
+            {isNotice ? "Свой прайс не загружен" : "Свой прайс"}
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-slate-700">
+            {isNotice ? (
+              <>
+                Сейчас расчёт идёт по тестовому прайсу — цены в КП будут
+                демонстрационными. Загрузите прайс поставщика, и сметы начнут
+                считаться по вашим ценам.
+              </>
+            ) : (
+              <>
+                Загрузите прайс поставщика — сметы будут считаться по вашим
+                ценам. Подойдёт .xlsx, .xls или .csv с колонками
+                «Наименование» и «Цена».
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -99,9 +144,11 @@ export function UploadPrice({ onUploaded }: Props) {
             />
             <label
               htmlFor="price-file"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300
-                         bg-white px-4 py-2.5 text-sm font-medium text-slate-700
-                         transition-colors hover:border-slate-400 hover:bg-slate-50"
+              className={
+                isNotice
+                  ? "btn-primary inline-flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm"
+                  : "inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50"
+              }
             >
               <Upload className="h-4 w-4" aria-hidden />
               Выбрать файл прайса
@@ -112,16 +159,18 @@ export function UploadPrice({ onUploaded }: Props) {
         {phase.kind === "confirm" && (
           <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
             <p className="text-sm font-medium text-slate-900">
-              Заменить прайс файлом «{phase.file.name}»?
+              {isNotice
+                ? `Загрузить прайс файлом «${phase.file.name}»?`
+                : `Заменить прайс файлом «${phase.file.name}»?`}
             </p>
             {/*
               Главное предупреждение: загрузка не добавляет, а заменяет.
               Человек должен понимать последствие до нажатия, а не после.
             */}
             <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
-              Текущий прайс будет удалён полностью и заменён новым. Сметы,
-              загруженные раньше, останутся, но их цены при следующем расчёте
-              возьмутся из нового прайса.
+              {isNotice
+                ? "Сметы, загруженные раньше, останутся, но их цены при следующем расчёте возьмутся из вашего прайса."
+                : "Текущий прайс будет удалён полностью и заменён новым. Сметы, загруженные раньше, останутся, но их цены при следующем расчёте возьмутся из нового прайса."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -129,7 +178,7 @@ export function UploadPrice({ onUploaded }: Props) {
                 className="btn-primary"
                 onClick={() => confirmUpload(phase.file)}
               >
-                Заменить прайс
+                {isNotice ? "Загрузить прайс" : "Заменить прайс"}
               </button>
               <button type="button" className="btn-secondary" onClick={reset}>
                 Отмена
@@ -149,7 +198,9 @@ export function UploadPrice({ onUploaded }: Props) {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
             <p className="flex items-center gap-2 text-sm font-medium text-slate-900">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
-              Прайс заменён: {phase.result.inserted} позиций
+              {isNotice
+                ? `Прайс загружен: ${phase.result.inserted} позиций`
+                : `Прайс заменён: ${phase.result.inserted} позиций`}
             </p>
             <ul className="mt-2 space-y-1 text-sm text-slate-700">
               <li>

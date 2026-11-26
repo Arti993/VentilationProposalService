@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { ArrowLeft, Server, Shield, Wrench } from "lucide-react";
 import { Logo } from "@shared/ui/Logo";
+import { UserMenu } from "@widgets/user-menu";
 
 /**
  * Адрес сервера берётся из окружения, а не зашит строкой.
@@ -103,7 +104,16 @@ export default function McpPage() {
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
             На главную
           </Link>
-          <Logo />
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block">
+              <Logo />
+            </span>
+            {/*
+              Страница статическая, поэтому сессию спрашивает сам `UserMenu`
+              в браузере. До ответа — заглушка того же размера.
+            */}
+            <UserMenu />
+          </div>
         </div>
       </header>
 
