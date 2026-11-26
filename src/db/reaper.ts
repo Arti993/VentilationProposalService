@@ -40,16 +40,44 @@ const STALE_AFTER = "10 minutes";
  *
  * `application_name` выставляется в `createClient`, поэтому фильтр
  * работает точно: миграции и скрипты из терминала сюда не попадают.
+ *
+ * ПОЧЕМУ ОТКРЫТАЯ ТРАНЗАКЦИЯ, А НЕ СОСТОЯНИЕ СЕССИИ
+ *
+ * Первая версия искала `state like 'idle in transaction%'` — и на этом
+ * попалась. При уборке тестовых организаций нашлось двадцать сессий,
+ * которые держали блокировки строк и не давали удалять записи, при этом в
+ * `idle in transaction` они не были: состояние `active`, ожидание
+ * `ClientRead`, то есть запрос выполнен, результат отдан, а клиент за ним
+ * так и не пришёл.
+ *
+ * Соблазн расширить фильтр до `active + ClientRead` оказался ловушкой:
+ * `postgres.js` держит в таком виде и совершенно здоровое простаивающее
+ * соединение (проверено тестом — свежая сессия попадала под уборку при
+ * нулевом пороге). На Vercel тёплый контейнер живёт с `idle_timeout: 0`
+ * часами, и уборка рвала бы соединения из-под работающего приложения.
+ *
+ * Признак, который не врёт: `xact_start`. Открытая транзакция — это
+ * ровно то, что держит блокировки. У здорового простаивающего соединения
+ * её нет вовсе, у брошенного посреди работы — есть, и возраст считается
+ * от её начала.
+ *
+ * Порог в десять минут заведомо больше любого нашего запроса: функция
+ * Vercel обрывается на шестидесяти секундах, так что легальная
+ * транзакция до порога не доживает.
+ *
+ * Себя не убиваем: `pid <> pg_backend_pid()` — иначе при пороге в ноль
+ * секунд (используется в тесте) уборка снимала бы собственный запрос.
  */
-export async function reapStaleTransactions(): Promise<number> {
+export async function reapStaleTransactions(olderThan: string = STALE_AFTER): Promise<number> {
   try {
     return await runIsolated(async (_db, sql) => {
       const rows = await sql<{ pid: number }[]>`
         select pid from pg_stat_activity
          where datname = current_database()
-           and state like 'idle in transaction%'
-           and state_change < now() - ${STALE_AFTER}::interval
            and application_name = 'kp-service'
+           and pid <> pg_backend_pid()
+           and xact_start is not null
+           and xact_start < now() - ${olderThan}::interval
       `;
 
       let killed = 0;
