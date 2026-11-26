@@ -12,13 +12,13 @@
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
 import { UploadEstimate } from "@features/upload-estimate";
-import { UploadPrice, fetchPriceItems } from "@features/upload-price";
-import type { PriceItem } from "@features/upload-price/api/client";
+import { UploadPrice, fetchPriceInfo, fetchPriceItems } from "@features/upload-price";
+import type { PriceInfo, PriceItem } from "@features/upload-price/api/client";
 import { DownloadProposal } from "@features/download-proposal";
 import { ChatPanel } from "@features/send-chat-message";
-import { AuthButton } from "@features/auth";
+import { UserMenu } from "@widgets/user-menu";
 import { SummaryCards } from "@widgets/estimate-summary";
 import { EstimateTable } from "@widgets/estimate-table";
 import { Logo } from "@shared/ui/Logo";
@@ -31,14 +31,36 @@ export interface ProposalPageProps {
    * Кто пришёл — известно на сервере (`/app` читает сессию).
    *
    * `null` — гость. Передаётся пропсом, а не запрашивается в браузере:
-   * иначе кнопка «Войти» появлялась бы через полсекунды, и человек,
-   * ищущий вход, успевал решить, что его нет.
+   * иначе шапка показывала бы «Войти» вошедшему человеку, пока идёт
+   * запрос.
    */
-  user: { email: string; isAnonymous: boolean } | null;
+  user: { name: string; email: string; image: string | null } | null;
 }
 
 export function ProposalPage({ user }: ProposalPageProps) {
   const [session, setSession] = useState<Session | null>(null);
+
+  /**
+   * Состояние прайса организации.
+   *
+   * `null` — ещё не знаем. Нужно, чтобы отличить «своего прайса нет,
+   * считаем по тестовому» от «прайс есть»: по позициям этого не понять,
+   * демо-прайс тоже даёт 215 позиций.
+   */
+  const [priceInfo, setPriceInfo] = useState<PriceInfo | null>(null);
+
+  /**
+   * Прайс, загруженный только что, в этой сессии.
+   *
+   * После загрузки блок предупреждения исчезает, и без этой записи
+   * человек не увидел бы подтверждения: он нажал «Загрузить», экран
+   * дёрнулся — и всё. На перезагрузке страницы подтверждение уже не
+   * нужно, потому что блок просто не появится.
+   */
+  const [justUploaded, setJustUploaded] = useState<{
+    fileName: string;
+    inserted: number;
+  } | null>(null);
 
   /**
    * Прайс для разбора спорных строк.
@@ -59,6 +81,29 @@ export function ProposalPage({ user }: ProposalPageProps) {
       alive = false;
     };
   }, [session]);
+
+  /**
+   * Состояние прайса спрашиваем сразу при открытии страницы, а не после
+   * загрузки сметы.
+   *
+   * Предупреждение «считаем по тестовому прайсу» нужно ДО того, как
+   * человек увидит цены: иначе он сначала поверит демонстрационным
+   * суммам, а потом прочитает, что они тестовые.
+   */
+  useEffect(() => {
+    let alive = true;
+    void fetchPriceInfo().then((info) => {
+      if (alive) setPriceInfo(info);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /** Перечитать состояние прайса после загрузки. */
+  const refreshPriceInfo = async () => {
+    setPriceInfo(await fetchPriceInfo());
+  };
 
   /** Клик по позиции в таблице — подставить вопрос в чат */
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
@@ -149,7 +194,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
               Кнопка стоит вне ветки `session` намеренно — вход нужен и до
               загрузки сметы, и после.
             */}
-            <AuthButton user={user} />
+            <UserMenu user={user} />
           </div>
         </div>
       </header>
@@ -176,13 +221,49 @@ export function ProposalPage({ user }: ProposalPageProps) {
             </div>
 
             {/*
-              Прайс — под загрузкой сметы и отдельной карточкой, а не
-              вкладкой: это настройка «один раз», а смета — ежедневная
-              работа. Сверху она мешала бы основному действию.
+              Прайс — только если своего ещё нет.
+
+              Раньше здесь всегда висела карточка «Свой прайс» с загрузкой,
+              и после загрузки она выглядела точно так же: человек не мог
+              понять, применился файл или нет. Хуже того, рядом с ежедневной
+              работой постоянно стояла кнопка, заменяющая рабочий прайс.
+              
+              Теперь блок говорит ровно одно: «считаем по тестовому» — и
+              уходит, как только появился свой. Замена прайса живёт в
+              кабинете, где её не нажмут случайно.
             */}
-            <div className="mt-4">
-              <UploadPrice />
-            </div>
+            {priceInfo && !priceInfo.hasOwnPrice && !justUploaded && (
+              <div className="mt-4">
+                <UploadPrice
+                  variant="notice"
+                  onUploaded={async (info) => {
+                    setJustUploaded(info);
+                    await refreshPriceInfo();
+                  }}
+                />
+              </div>
+            )}
+
+            {/*
+              Подтверждение после загрузки: блок уже убран, и без него
+              человек не увидел бы, что файл принят.
+            */}
+            {justUploaded && (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
+                <p className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
+                  Прайс загружен: {justUploaded.inserted} позиций
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                  Файл «{justUploaded.fileName}» принят. Дальше сметы считаются
+                  по вашим ценам. Заменить файл можно в{" "}
+                  <Link href="/account" className="font-medium text-accent-700 hover:underline">
+                    настройках аккаунта
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
 
             {/* Подсказка о форматах — снимает вопрос до загрузки */}
             <div className="mt-5 grid gap-3 sm:mt-6 sm:grid-cols-3">

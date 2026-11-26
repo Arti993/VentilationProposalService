@@ -28,6 +28,7 @@ import { getActor, denied } from "@/lib/auth/guard.ts";
 import { isDemoOrg } from "@/lib/auth/org.ts";
 import { parsePriceWorkbook, describeQuality } from "@/lib/price/parse.ts";
 import { replacePrice, countPrice, loadPrice } from "@/db/repositories/price.ts";
+import { savePriceMeta, getPriceMeta } from "@/db/repositories/priceMeta.ts";
 import { indexPriceInBackground } from "@/db/repositories/priceIndex.ts";
 
 export const runtime = "nodejs";
@@ -175,6 +176,22 @@ export async function POST(request: Request) {
   const quality = describeQuality(parsed.items);
 
   /**
+   * Запоминаем имя файла и дату.
+   *
+   * Отдельным try: прайс уже сохранён, и падение этой записи не должно
+   * превращать успешную загрузку в ошибку. Кабинет в худшем случае не
+   * покажет имя файла — но покажет, что прайс загружен.
+   */
+  try {
+    await savePriceMeta(actor.orgId, file.name, replaced.inserted);
+  } catch (e) {
+    console.error(
+      "[price] не удалось записать сведения о прайсе:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  /**
    * Индексация — в фоне, без ожидания.
    *
    * Почему не дожидаемся: 215 позиций — это семь обращений к модели
@@ -257,10 +274,12 @@ export async function GET(request: Request) {
      * было бы выгрузить чужой прайс — то есть цены поставщика конкурента.
      */
     const items = await loadPrice(orgId);
+    const isDemo = isDemoOrg(orgId);
     return NextResponse.json({
       ok: true,
       total: items.length,
-      isDemo: isDemoOrg(orgId),
+      isDemo,
+      hasOwnPrice: !isDemo && items.length > 0,
       items: items.map((p) => ({
         id: p.id,
         rawName: p.rawName,
@@ -272,5 +291,30 @@ export async function GET(request: Request) {
   }
 
   const total = await countPrice(orgId);
-  return NextResponse.json({ ok: true, total, isDemo: isDemoOrg(orgId) });
+
+  /**
+   * Свой прайс — это «не демо И есть позиции».
+   *
+   * Одного `total > 0` мало: демо-прайс тоже даёт 215 позиций, и новый
+   * пользователь увидел бы «прайс загружен», хотя своего у него нет.
+   * Одного `!isDemoOrg` тоже мало: организация могла загрузить файл, из
+   * которого ничего не разобралось, — это другой разговор с человеком.
+   */
+  const isDemo = isDemoOrg(orgId);
+  const meta = await getPriceMeta(orgId);
+
+  return NextResponse.json({
+    ok: true,
+    total,
+    isDemo,
+    hasOwnPrice: !isDemo && total > 0,
+    /**
+     * Имя файла и дата — только если загрузка была после появления
+     * `price_meta`. У старых загрузок их нет, и это не ошибка:
+     * интерфейс покажет «прайс загружен» без подробностей.
+     */
+    fileName: meta?.fileName ?? null,
+    itemCount: meta?.itemCount ?? null,
+    uploadedAt: meta?.uploadedAt?.toISOString() ?? null,
+  });
 }

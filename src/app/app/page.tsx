@@ -42,12 +42,19 @@ export default async function AppPage() {
    * Аноним — это гость с точки зрения интерфейса.
    *
    * У него есть сессия, но нет своей организации: свои прайсы недоступны.
-   * Показывать ему email и «Выйти» бессмысленно — ему нужен путь к
+   * Показывать ему имя и аватар бессмысленно — ему нужен путь к
    * регистрации.
+   *
+   * Если имя пустое (старые аккаунты, регистрация без имени), подставляем
+   * почту: пустая строка на месте имени выглядит как поломка.
    */
   const user =
     actor && !actor.isAnonymous && actor.email
-      ? { email: actor.email, isAnonymous: false }
+      ? {
+          name: actor.name.trim() || actor.email,
+          email: actor.email,
+          image: actor.image,
+        }
       : null;
 
   return <ProposalPage user={user} />;

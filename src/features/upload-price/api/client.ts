@@ -63,11 +63,25 @@ export interface PriceUploadFailure {
 
 export type PriceUploadResult = PriceUploadSuccess | PriceUploadFailure;
 
-/** Сколько позиций в прайсе организации. */
+/** Состояние прайса организации. */
 export interface PriceInfo {
   ok: boolean;
   total: number;
   isDemo: boolean;
+  /**
+   * Загружен ли СВОЙ прайс.
+   *
+   * Считается на сервере как «не демо И есть позиции». Клиенту нельзя
+   * вывести это из `isDemo` и `total` самому: демо-прайс тоже даёт 215
+   * позиций, и новичок увидел бы «прайс загружен».
+   */
+  hasOwnPrice?: boolean;
+  /** Имя загруженного файла. `null` — загрузка была до учёта имён. */
+  fileName?: string | null;
+  /** Сколько позиций разобралось в последней загрузке */
+  itemCount?: number | null;
+  /** Дата загрузки в ISO. `null` — неизвестна */
+  uploadedAt?: string | null;
 }
 
 /** Загружает файл прайса. */
