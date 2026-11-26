@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { Logo } from "@shared/ui/Logo";
+import { UserMenu } from "@widgets/user-menu";
 
 const NAV = [
   { href: "#how", label: "Как работает" },
@@ -95,6 +96,14 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
+          {/*
+            Аккаунт виден на всех страницах, а не только в приложении.
+            На лендинге сервер сессию не читает (страница статическая),
+            поэтому `UserMenu` без пропса спрашивает её сам. До ответа
+            рисуется заглушка того же размера — шапка не прыгает.
+          */}
+          <UserMenu />
+
           <Link href="/app" className="btn-primary hidden sm:inline-flex">
             Попробовать
             <ArrowRight className="h-4 w-4" />

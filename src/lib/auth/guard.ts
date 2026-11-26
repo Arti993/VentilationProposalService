@@ -29,6 +29,22 @@ export interface Actor {
   /** Анонимный аккаунт — доступ урезан */
   isAnonymous: boolean;
   email: string | null;
+  /**
+   * Имя, которое человек ввёл сам.
+   *
+   * Нужно шапке: показывать «Василий», а не адрес почты. Почта — это
+   * логин, её не выбирают, и в интерфейсе она читается как техническая
+   * деталь. Имя человек писал сам, и оно делает экран «своим».
+   */
+  name: string;
+  /**
+   * Аватар — data URL (см. кабинет) или ссылка.
+   *
+   * `null` — картинки нет, интерфейс покажет инициалы. Отдельного поля
+   * для «инициалов» не заводим: они выводятся из имени и не требуют
+   * хранения.
+   */
+  image: string | null;
 }
 
 export type OrganizationRole = "owner" | "admin" | "member";
@@ -81,6 +97,8 @@ export async function getActor(): Promise<Actor | null> {
       role: "member",
       isAnonymous: true,
       email: session.user.email ?? null,
+      name: session.user.name ?? "",
+      image: (session.user as { image?: string | null }).image ?? null,
     };
   }
 
@@ -107,6 +125,8 @@ export async function getActor(): Promise<Actor | null> {
       role: "member",
       isAnonymous,
       email: session.user.email ?? null,
+      name: session.user.name ?? "",
+      image: (session.user as { image?: string | null }).image ?? null,
     };
   }
 
@@ -118,6 +138,8 @@ export async function getActor(): Promise<Actor | null> {
     role,
     isAnonymous,
     email: session.user.email ?? null,
+    name: session.user.name ?? "",
+    image: (session.user as { image?: string | null }).image ?? null,
   };
 }
 

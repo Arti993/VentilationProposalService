@@ -16,7 +16,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { signIn, signUp, signInAnonymous } from "../api/client";
 
 type Mode = "signin" | "signup";
@@ -27,6 +27,30 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  /**
+   * Повтор пароля при регистрации.
+   *
+   * Зачем, если пароль и так проверяется на длину: опечатка в одном
+   * символе при регистрации создаёт аккаунт, в который человек не может
+   * войти — и узнаёт об этом уже после того, как данные привязаны к
+   * организации. Повтор ловит опечатку до создания аккаунта, когда
+   * исправить ещё ничего не стоит.
+   */
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+
+  /**
+   * Показывать ли введённые символы.
+   *
+   * По умолчанию пароль скрыт — это ожидаемое поведение и защита от
+   * взгляда через плечо. Глазок нужен для другого: на телефоне с
+   * автоисправлением легко не заметить, что пароль набран не в той
+   * раскладке. Один клик — и видно.
+   *
+   * Один переключатель на оба поля: человек, который проверяет пароль,
+   * делает это сразу в обоих.
+   */
+  const [showPassword, setShowPassword] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +103,15 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
     }
     if (mode === "signup" && name.trim().length < 2) {
       setError("Укажите имя — его видно в документах.");
+      return;
+    }
+    /**
+     * Пароли сверяем ДО запроса к серверу: если они разошлись, аккаунт
+     * создавать не надо вовсе. Сервер о такой проверке ничего не знает —
+     * второе поле существует только здесь.
+     */
+    if (mode === "signup" && password !== passwordConfirm) {
+      setError("Пароли не совпадают. Проверьте, нет ли опечатки.");
       return;
     }
 
@@ -177,16 +210,64 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
             <label htmlFor="password" className="block text-sm font-medium text-slate-700">
               Пароль
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100"
-              placeholder="Не короче 8 символов"
-            />
+            {/*
+              Кнопка-глазок внутри поля, а не рядом с ним: так она не
+              сдвигает соседние элементы и остаётся в зоне внимания.
+              `type="button"` обязателен — иначе она отправит форму.
+            */}
+            <div className="relative mt-1.5">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="block w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100"
+                placeholder="Не короче 8 символов"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                aria-pressed={showPassword}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-slate-500 transition-colors hover:text-slate-900"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden />
+                )}
+              </button>
+            </div>
           </div>
+
+          {mode === "signup" && (
+            <div>
+              <label
+                htmlFor="password-confirm"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Повторите пароль
+              </label>
+              <div className="relative mt-1.5">
+                <input
+                  id="password-confirm"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  className="block w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100"
+                  placeholder="Ещё раз тот же пароль"
+                />
+                {/*
+                  Второй глазок не нужен: он переключал бы то же самое
+                  состояние и выглядел бы как отдельная настройка. Но
+                  место справа оставляем — иначе поле окажется на 11
+                  пикселей короче соседнего и форма поедет.
+                */}
+              </div>
+            </div>
+          )}
 
           {error && (
             <p role="alert" className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
@@ -213,6 +294,9 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
                 onClick={() => {
                   setMode("signup");
                   setError(null);
+                  // Поле повтора пришло из другого режима пустым — иначе
+                  // в нём остался бы прошлый пароль и «не совпадает»
+                  setPasswordConfirm("");
                 }}
                 className="font-medium text-accent-700 hover:underline"
               >
@@ -227,6 +311,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
                 onClick={() => {
                   setMode("signin");
                   setError(null);
+                  setPasswordConfirm("");
                 }}
                 className="font-medium text-accent-700 hover:underline"
               >

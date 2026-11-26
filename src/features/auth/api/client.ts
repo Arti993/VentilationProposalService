@@ -13,6 +13,8 @@ export interface AuthUser {
   name: string;
   email: string;
   isAnonymous: boolean;
+  /** Аватар: data URL (после сжатия в кабинете) или ссылка. `null` — нет. */
+  image: string | null;
 }
 
 export interface AuthError {
@@ -68,7 +70,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     const res = await fetch(`${BASE}/get-session`, { credentials: "same-origin" });
     if (!res.ok) return null;
     const json = (await res.json()) as {
-      user?: { id: string; name: string; email: string; isAnonymous?: boolean };
+      user?: {
+        id: string;
+        name: string;
+        email: string;
+        isAnonymous?: boolean;
+        image?: string | null;
+      };
     } | null;
     if (!json?.user) return null;
     return {
@@ -76,6 +84,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       name: json.user.name,
       email: json.user.email,
       isAnonymous: Boolean(json.user.isAnonymous),
+      image: json.user.image ?? null,
     };
   } catch {
     return null;
@@ -104,6 +113,26 @@ export async function signUp(
 /** Выход. */
 export async function signOut(): Promise<void> {
   await call("/sign-out", {});
+}
+
+/**
+ * Обновление имени и аватара.
+ *
+ * ПОЧЕМУ ЧЕРЕЗ ЭНДПОИНТ БИБЛИОТЕКИ, А НЕ СВОЙ SQL
+ *
+ * `update-user` не просто пишет строку в `user`: он переставляет cookie
+ * сессии с новыми данными. При включённом `cookieCache` сессия живёт в
+ * подписанной cookie пять минут, и правка в базе без обновления cookie
+ * означала бы «имя изменилось, но шапка показывает старое ещё пять
+ * минут». Библиотека делает обе записи в одном месте — повторять это
+ * руками значит однажды забыть вторую.
+ */
+export async function updateProfile(input: {
+  name?: string;
+  image?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const r = await call("/update-user", input);
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
 }
 
 /**

@@ -28,6 +28,8 @@ import Link from "next/link";
 import { ArrowLeft, Activity } from "lucide-react";
 import { productMetrics, type ProductMetrics } from "@/db/repositories/metrics";
 import { Logo } from "@shared/ui/Logo";
+import { UserMenu } from "@widgets/user-menu";
+import { getActor } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +141,17 @@ export default async function StatusPage() {
     console.error("[status]", error);
   }
 
+  /**
+   * Пользователь читается здесь, потому что страница и так динамическая
+   * (метрики считаются на каждый заход). Это даёт шапке готовое состояние
+   * в первом же HTML — без мигания «Войти» у вошедшего человека.
+   */
+  const actor = await getActor();
+  const user =
+    actor && !actor.isAnonymous && actor.email
+      ? { name: actor.name.trim() || actor.email, email: actor.email, image: actor.image }
+      : null;
+
   return (
     <div className="min-h-screen bg-slate-50/70">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
@@ -150,7 +163,12 @@ export default async function StatusPage() {
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
             На главную
           </Link>
-          <Logo />
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block">
+              <Logo />
+            </span>
+            <UserMenu user={user} />
+          </div>
         </div>
       </header>
 
