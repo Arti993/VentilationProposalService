@@ -83,7 +83,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!orgId) {
     return fail(
       401,
-      "Нужен заголовок Authorization: Bearer <токен>. Токен выдаётся в кабинете.",
+      "Передайте токен организации в заголовке Authorization: Bearer <токен>.",
     );
   }
 

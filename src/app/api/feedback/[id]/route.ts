@@ -32,11 +32,11 @@ export async function PATCH(
 ) {
   const actor = await getActor();
   if (!actor?.orgId) {
-    return NextResponse.json({ ok: false, error: "Нужен вход" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Войдите в аккаунт" }, { status: 401 });
   }
   if (isDemoOrg(actor.orgId)) {
     return NextResponse.json(
-      { ok: false, error: "В демо-организации это недоступно" },
+      { ok: false, error: "Для сохранения изменений нужен аккаунт" },
       { status: 403 },
     );
   }
@@ -74,14 +74,14 @@ export async function PATCH(
      */
     const found = await setFeedbackStatus(actor.orgId, id, body.status);
     if (!found) {
-      return NextResponse.json({ ok: false, error: "Разбор не найден" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "Сохранённое соответствие не найдено" }, { status: 404 });
     }
     return NextResponse.json({ ok: true, id, status: body.status });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/feedback/:id]", msg);
     return NextResponse.json(
-      { ok: false, error: `Не удалось обновить: ${msg}` },
+      { ok: false, error: "Не удалось обновить соответствие. Попробуйте ещё раз." },
       { status: 500 },
     );
   }

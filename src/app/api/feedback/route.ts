@@ -26,7 +26,7 @@
  *
  * ПРОВЕРКИ
  *
- * 1. Нужен вход: у гостя нет организации, а словарь у каждого свой.
+ * 1. Войдите в аккаунт: у гостя нет организации, а словарь у каждого свой.
  * 2. Демо-организация запрещена: её словарь был бы общим для всех
  *    посетителей, и один гость менял бы выдачу другому.
  * 3. `chosenCode` проверяется по прайсу этой организации — иначе в
@@ -60,8 +60,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Нужен вход",
-        hint: "Синонимы привязаны к организации. Войдите или зарегистрируйтесь — это бесплатно.",
+        error: "Войдите в аккаунт",
+        hint: "Для сохранения соответствий войдите в аккаунт или зарегистрируйтесь.",
         // Признак для интерфейса: показать кнопку входа, а не просто текст
         needAuth: true,
       },
@@ -80,10 +80,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "В демо-организации это недоступно",
+        error: "Для сохранения изменений нужен аккаунт",
         hint:
-          "Демо-прайс общий для всех посетителей: правки одного гостя меняли бы " +
-          "выдачу другому. Зарегистрируйтесь — получите свою организацию.",
+          "Зарегистрируйтесь и загрузите прайс поставщика, чтобы сохранять уточнения для следующих расчётов.",
       },
       { status: 403 },
     );
@@ -166,7 +165,7 @@ export async function POST(request: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/feedback]", msg);
     return NextResponse.json(
-      { ok: false, error: `Не удалось сохранить: ${msg}` },
+      { ok: false, error: "Не удалось сохранить соответствие. Попробуйте ещё раз." },
       { status: 500 },
     );
   }
@@ -181,7 +180,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const actor = await getActor();
   if (!actor?.orgId) {
-    return NextResponse.json({ ok: false, error: "Нужен вход" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Войдите в аккаунт" }, { status: 401 });
   }
 
   const url = new URL(request.url);
@@ -208,7 +207,7 @@ export async function GET(request: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/feedback] чтение", msg);
     return NextResponse.json(
-      { ok: false, error: `Не удалось прочитать: ${msg}` },
+      { ok: false, error: "Не удалось загрузить сохранённые соответствия. Попробуйте ещё раз." },
       { status: 500 },
     );
   }

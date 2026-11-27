@@ -15,7 +15,7 @@ export async function uploadEstimate(file: File): Promise<UploadResponse> {
   const json = (await res.json()) as UploadResponse | ApiError;
 
   if (!res.ok || !("ok" in json) || json.ok !== true) {
-    const msg = "error" in json ? json.error : `Ошибка загрузки (HTTP ${res.status})`;
+    const msg = "error" in json ? json.error : "Не удалось загрузить смету. Попробуйте ещё раз.";
     throw new Error(msg);
   }
   return json;
@@ -104,9 +104,9 @@ export async function askAgent(
    */
   if (!res.ok || !res.headers.get("content-type")?.includes("text/event-stream")) {
     const json = (await res.json().catch(() => ({}))) as Partial<ApiError>;
-    throw new Error(json.error ?? `Ошибка чата (HTTP ${res.status})`);
+    throw new Error(json.error ?? "Не удалось получить ответ. Попробуйте ещё раз.");
   }
-  if (!res.body) throw new Error("Сервер не прислал поток ответа");
+  if (!res.body) throw new Error("Не удалось получить ответ. Попробуйте ещё раз.");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -154,13 +154,13 @@ export async function askAgent(
           tokens: d.tokens,
         };
       } else if (event === "error") {
-        failure = (parsed as { message?: string }).message ?? "Неизвестная ошибка";
+        failure = (parsed as { message?: string }).message ?? "Не удалось получить ответ. Попробуйте ещё раз.";
       }
     }
   }
 
   if (failure) throw new Error(failure);
-  if (!result) throw new Error("Поток завершился без ответа");
+  if (!result) throw new Error("Получение ответа прервано. Отправьте вопрос ещё раз.");
   return result;
 }
 
@@ -175,7 +175,7 @@ export async function downloadProposal(sessionId: string): Promise<void> {
   const res = await fetch(`/api/proposal/${sessionId}`);
 
   if (!res.ok) {
-    let msg = `Не удалось скачать КП (HTTP ${res.status})`;
+    let msg = "Не удалось скачать КП. Попробуйте ещё раз.";
     try {
       const json = (await res.json()) as ApiError;
       if (json.error) msg = json.error;

@@ -6,6 +6,7 @@
  * Агент помнит смету через sessionId: браузер передаёт только ID,
  * данные берутся на сервере. Поэтому подменить цены в запросе нельзя.
  */
+import { requestErrorMessage } from "@shared/lib/errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Loader2, Sparkles, Bot, User, Check } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -120,7 +121,7 @@ export function ChatPanel({
         });
         setMessages((m) => [...m, { role: "assistant", text: res.answer, ms: res.ms }]);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Ошибка чата");
+        setError(requestErrorMessage(e, "Не удалось получить ответ. Попробуйте ещё раз."));
       } finally {
         setBusy(false);
         setSteps([]);
@@ -149,9 +150,9 @@ export function ChatPanel({
               <Sparkles className="h-5 w-5 text-accent-600" />
             </div>
             <div>
-              <p className="font-medium text-slate-900">Спросите про смету или прайс</p>
+              <p className="font-medium text-slate-900">Вопросы по смете и прайсу</p>
               <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-                Цены берутся только из прайса — выдумывать агент не умеет
+                Уточните наличие оборудования, стоимость или причины отсутствия цены.
               </p>
             </div>
           </div>
@@ -221,7 +222,7 @@ export function ChatPanel({
               {steps.length === 0 ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-500" />
-                  <span className="text-sm text-slate-500">Думаю…</span>
+                  <span className="text-sm text-slate-500">Подготовка ответа…</span>
                 </div>
               ) : (
                 <ul className="space-y-1.5" aria-live="polite">

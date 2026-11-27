@@ -7,6 +7,7 @@
  * клиенте, состояние загрузки и ошибки. Сервер валидирует повторно —
  * клиентская проверка для удобства, а не для безопасности.
  */
+import { requestErrorMessage } from "@shared/lib/errors";
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import { UploadCloud, FileText, Loader2, X, ArrowRight } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -56,7 +57,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
     if (!ACCEPTED.includes(ext)) {
       setError(
         `Формат «${ext || "без расширения"}» не поддерживается. ` +
-          `Подойдёт Excel, Word или текстовый файл.`,
+          `Выберите файл Excel, Word, CSV или TXT.`,
       );
       return;
     }
@@ -83,7 +84,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
       const res = await uploadEstimate(file);
       onLoaded(res.session);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось загрузить смету");
+      setError(requestErrorMessage(e, "Не удалось загрузить смету. Проверьте подключение и попробуйте ещё раз."));
     } finally {
       setBusy(false);
     }
@@ -96,14 +97,14 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
     setError(null);
     try {
       const res = await fetch(`/api/demo-estimate?file=${which}`);
-      if (!res.ok) throw new Error("Не удалось получить демо-смету");
+      if (!res.ok) throw new Error("Не удалось открыть пример сметы. Попробуйте ещё раз.");
       const text = await res.text();
       const name = which === "office" ? "estimate-office.txt" : "estimate-warehouse.csv";
       const demoFile = new File([text], name, { type: "text/plain" });
       const up = await uploadEstimate(demoFile);
       onLoaded(up.session);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка демо-сметы");
+      setError(requestErrorMessage(e, "Не удалось обработать пример сметы. Попробуйте ещё раз."));
     } finally {
       setBusy(false);
     }
@@ -203,7 +204,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
           {busy ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Обрабатываю…
+              Обработка…
             </>
           ) : (
             <>
@@ -228,7 +229,7 @@ export function UploadEstimate({ onLoaded }: UploadEstimateProps) {
 
       {/* Демо: пользователю не нужно искать файл, чтобы увидеть работу сервиса */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-3">
-        <span className="py-2 text-xs text-slate-500">Нет файла под рукой?</span>
+        <span className="py-2 text-xs text-slate-500">Примеры смет:</span>
         {/*
           type="button" обязателен. Кнопки загрузки демо — не единственные
           кнопки на этом экране, и без явного типа браузер считает их

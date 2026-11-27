@@ -8,6 +8,8 @@
  * нужно здесь, а не в десяти компонентах.
  */
 
+import { isAnonymousUser } from "@shared/lib/auth";
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -52,14 +54,14 @@ async function call(
       const msg =
         (json as { message?: string; error?: string } | null)?.message ??
         (json as { error?: string } | null)?.error ??
-        `Ошибка авторизации (HTTP ${res.status})`;
+        "Не удалось выполнить запрос. Попробуйте ещё раз.";
       return { ok: false, error: msg };
     }
     return { ok: true, data: json };
-  } catch (e) {
+  } catch {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Сеть недоступна",
+      error: "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.",
     };
   }
 }
@@ -74,7 +76,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         id: string;
         name: string;
         email: string;
-        isAnonymous?: boolean;
+        isAnonymous?: boolean | null;
         image?: string | null;
       };
     } | null;
@@ -83,7 +85,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       id: json.user.id,
       name: json.user.name,
       email: json.user.email,
-      isAnonymous: Boolean(json.user.isAnonymous),
+      isAnonymous: isAnonymousUser(json.user),
       image: json.user.image ?? null,
     };
   } catch {

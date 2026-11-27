@@ -1,2 +1,2 @@
 import { PageLoading } from "@shared/ui/PageLoading";
-export default function Loading() { return <PageLoading title="Как работает сервис" />; }
+export default function Loading() { return <PageLoading title="Статистика сервиса" />; }
