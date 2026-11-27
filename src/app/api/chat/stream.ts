@@ -56,6 +56,7 @@ export interface DoneEvent {
   tokens: number;
   toolCalls: number;
   answer: string;
+  suggestions: string[];
 }
 
 /**
