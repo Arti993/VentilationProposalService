@@ -77,6 +77,9 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [followups, setFollowups] = useState<string[]>([]);
+  const conversationRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Шаги текущего ответа: «смотрю прайс», «готовлю ответ» */
@@ -90,7 +93,9 @@ export function ChatPanel({
   const send = useCallback(
     async (question: string) => {
       const q = question.trim();
-      if (!q || busy) return;
+      if (!q || sendingRef.current) return;
+      sendingRef.current = true;
+      conversationRef.current ??= crypto.randomUUID();
 
       setError(null);
       setInput("");
@@ -103,7 +108,7 @@ export function ChatPanel({
         // что показать модели. Браузер присылает только новые слова.
         const res = await askAgent(q, {
           sessionId,
-          conversationId: sessionId,
+          conversationId: sessionId ?? conversationRef.current,
           /**
            * Шаг приходит дважды: `start` и `done`. Обновляем запись по
            * `id`, а не добавляем новую — иначе список превратился бы в
@@ -119,14 +124,16 @@ export function ChatPanel({
             }),
         });
         setMessages((m) => [...m, { role: "assistant", text: res.answer, ms: res.ms }]);
+        setFollowups(res.suggestions ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Ошибка чата");
       } finally {
+        sendingRef.current = false;
         setBusy(false);
         setSteps([]);
       }
     },
-    [busy, sessionId],
+    [sessionId],
   );
 
   // Внешний вопрос (клик по позиции в таблице) — задаём один раз
@@ -261,9 +268,9 @@ export function ChatPanel({
         )}
       </div>
 
-      {messages.length === 0 && suggestions.length > 0 && (
+      {!busy && (messages.length === 0 ? suggestions : followups).length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
-          {suggestions.map((s) => (
+          {(messages.length === 0 ? suggestions : followups).map((s) => (
             <button
               key={s}
               // type="button" обязателен: подсказки стоят рядом с формой
@@ -291,7 +298,7 @@ export function ChatPanel({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Например: почему позиция 12 без цены?"
+          placeholder={messages.length === 0 ? "Задайте вопрос по смете или прайсу" : "Продолжите диалог…"}
           className="field !rounded-xl !py-2.5 !text-sm"
           aria-label="Вопрос ассистенту"
         />

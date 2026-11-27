@@ -27,6 +27,7 @@ import { makeTools, type ToolContext } from "./tools.ts";
 import { makeSessionTools } from "./estimateTools.ts";
 import { makePriceSearchTool } from "./ragTool.ts";
 import { SessionStore } from "./session.ts";
+import { FOLLOWUP_PROMPT } from "./followups.ts";
 
 /** Состояние агента. */
 export const AgentState = Annotation.Root({
@@ -183,7 +184,7 @@ function routeAfterGuard(state: AgentStateType): "agent" | "refuse" {
  */
 export function createAgent(
   ctx: ToolContext,
-  opts: { model?: string; store?: SessionStore } = {},
+  opts: { model?: string; store?: SessionStore; suggestFollowups?: boolean } = {},
 ) {
   const store = opts.store ?? new SessionStore();
 
@@ -233,7 +234,7 @@ export function createAgent(
     // Контекст сметы добавляется В КАЖДЫЙ вызов: если пользователь загрузил
     // файл посреди диалога, агент должен увидеть это сразу.
     const messages = [
-      new SystemMessage(SYSTEM_PROMPT + sessionContext(store)),
+      new SystemMessage(SYSTEM_PROMPT + sessionContext(store) + (opts.suggestFollowups ? FOLLOWUP_PROMPT : "")),
       ...state.messages,
     ];
 
@@ -244,11 +245,17 @@ export function createAgent(
     const lastHuman = [...state.messages].reverse().find((m) => m._getType() === "human");
     const question = typeof lastHuman?.content === "string" ? lastHuman.content : "";
 
+    // Короткое «а почему?» продолжает предыдущую тему. Явный новый
+    // вопрос по прайсу выбирает свои инструменты, даже после сметы.
+    const explicitTopic = /смет|позици|прайс|воздуховод|отвод|тройник|ниппел|переход|заглушк|диффузор|реш[её]тк/i.test(question);
+    const recentQuestions = explicitTopic ? "" : state.messages
+      .filter((m) => m._getType() === "human").slice(-3)
+      .map((m) => typeof m.content === "string" ? m.content : "").join("\n");
     const model = createChatModel({
       model: opts.model ?? process.env.LLM_AGENT_MODEL ?? DEFAULT_AGENT_MODEL,
       temperature: 0,
       maxTokens: 1200,
-    }).bindTools(toolsFor(question));
+    }).bindTools(toolsFor(question + "\n" + recentQuestions));
 
     const response = await model.invoke(messages);
     return { messages: [response] };

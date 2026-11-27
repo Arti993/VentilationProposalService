@@ -15,6 +15,9 @@
  *    публичная ссылка означала бы «кто угодно жжёт бюджет polza.ai».
  */
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
+import { priceConversationId } from "@/lib/agent/conversation";
+import { splitFollowups, selectFollowups } from "@/lib/agent/followups";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import {
   createAgent,
@@ -158,24 +161,27 @@ export async function POST(req: Request): Promise<Response> {
       // было бы расспросить агента о чужой смете — ценах, составе,
       // суммах.
       const saved = await getSession(body.sessionId, viewerOrg);
-      if (saved) store.restore(saved);
+      if (!saved) {
+        return NextResponse.json({ ok: false, error: "Смета не найдена." }, { status: 404 });
+      }
+      store.restore(saved);
     }
 
-    const conversationId = body.conversationId ?? body.sessionId ?? "anonymous";
+    if (!body.sessionId && !actor) {
+      return NextResponse.json({ ok: false, error: "Войдите в аккаунт, чтобы продолжить диалог." }, { status: 401 });
+    }
+    let conversationId = body.sessionId ?? "";
+    if (!body.sessionId && actor) {
+      try {
+        conversationId = priceConversationId(body.conversationId ?? randomUUID(), actor.userId, viewerOrg);
+      } catch {
+        return NextResponse.json({ ok: false, error: "Некорректный идентификатор диалога." }, { status: 400 });
+      }
+    }
 
-    /**
-     * Право на диалог.
-     *
-     * `conversationId` приходит от клиента и угадывается не хуже, чем id
-     * сметы: он виден в запросе в панели разработчика. Читать по нему
-     * чужую переписку — утечка того же класса, что и чужое КП.
-     *
-     * Проверка простая и достаточная: диалог принадлежит либо смете
-     * этой организации, либо (если сметы нет) доступен только анониму
-     * в демо-организации. Второе условие нужно, чтобы аноним не читал
-     * диалоги вошедших пользователей, зная их идентификаторы.
-     */
-    const ownsConversation = await canAccessConversation(conversationId, viewerOrg);
+    // Сметные диалоги проверяем по владельцу сметы. Для чата по прайсу
+    // ID уже вычислен из пользователя и организации на сервере.
+    const ownsConversation = !body.sessionId || await canAccessConversation(conversationId, viewerOrg);
     if (!ownsConversation) {
       return NextResponse.json(
         { ok: false, error: "Диалог не найден." },
@@ -203,7 +209,7 @@ export async function POST(req: Request): Promise<Response> {
     // прайсе и пересказать их.
     const agent = createAgent(
       { getPrice: () => getPrice(viewerOrg), useLlm: true },
-      { store },
+      { store, suggestFollowups: true },
     );
 
     const messages = [...historyToMessages(history), new HumanMessage(question)];
@@ -227,6 +233,7 @@ export async function POST(req: Request): Promise<Response> {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         let answer = "";
+        let suggestions: string[] = [];
         let toolCalls = 0;
         let tokens = { input: 0, output: 0 };
 
@@ -251,16 +258,23 @@ export async function POST(req: Request): Promise<Response> {
           }
 
           if (lastState) {
-            answer = finalText(lastState);
+            const parsed = splitFollowups(finalText(lastState));
+            answer = parsed.answer;
+            suggestions = selectFollowups(parsed.suggestions, [...history, { role: "user", text: question }], store.current !== null);
             toolCalls = countToolCalls(lastState);
             tokens = tokensFromMessages(lastState.messages);
           }
 
+          // Save before the next question becomes available: no race with a quick chip click.
+          if (answer) {
+            await appendMessage({ conversationId, estimateId: body.sessionId ?? null, role: "assistant", text: answer, toolCalls });
+          }
           send(controller, "done", {
             ms: Date.now() - t0,
             tokens: tokens.input + tokens.output,
             toolCalls,
             answer,
+            suggestions,
           } satisfies DoneEvent);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -268,26 +282,6 @@ export async function POST(req: Request): Promise<Response> {
           send(controller, "error", { message: `Не удалось получить ответ: ${msg}` });
         } finally {
           controller.close();
-
-          /**
-           * Запись в историю — ПОСЛЕ закрытия потока.
-           *
-           * Пользователь уже увидел ответ; задерживать его ради записи в
-           * базу незачем. Если запись не удастся, ответ всё равно
-           * останется верным — потеряется только контекст следующего
-           * вопроса, и это меньшее зло, чем сорванный ответ.
-           */
-          if (answer) {
-            void appendMessage({
-              conversationId,
-              estimateId: body.sessionId ?? null,
-              role: "assistant",
-              text: answer,
-              toolCalls,
-            }).catch((e: unknown) => {
-              console.error("[api/chat] история", e instanceof Error ? e.message : e);
-            });
-          }
 
           void recordTokens(ip, tokens.input, tokens.output).catch((e: unknown) => {
             console.error("[api/chat] токены", e instanceof Error ? e.message : e);

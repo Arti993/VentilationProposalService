@@ -29,6 +29,7 @@ export interface ChatTurn {
 export interface ChatResponse {
   ok: true;
   answer: string;
+  suggestions?: string[];
   /** Сколько инструментов вызвал агент — для отладки и метрик */
   toolCalls: number;
   /** Время ответа в мс */
@@ -145,10 +146,11 @@ export async function askAgent(
       if (event === "step") {
         options.onStep?.(parsed as ChatStep);
       } else if (event === "done") {
-        const d = parsed as { ms: number; tokens: number; toolCalls: number; answer: string };
+        const d = parsed as { ms: number; tokens: number; toolCalls: number; answer: string; suggestions?: string[] };
         result = {
           ok: true,
           answer: d.answer,
+          suggestions: d.suggestions,
           toolCalls: d.toolCalls,
           ms: d.ms,
           tokens: d.tokens,
