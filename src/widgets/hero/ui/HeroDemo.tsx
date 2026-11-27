@@ -39,7 +39,7 @@ const ROWS: DemoRow[] = [
 ];
 
 const STATUS_LABEL: Record<DemoRow["status"], string> = {
-  priced: "Цена есть",
+  priced: "С ценой",
   not_found: "Нет в прайсе",
   needs_human: "На проверку",
 };
@@ -177,7 +177,7 @@ export function HeroDemo() {
             </p>
           </div>
           <p className="max-w-[9rem] shrink-0 text-right text-2xs leading-relaxed text-slate-500 sm:max-w-[10rem]">
-            Две позиции без цены — уточнит менеджер
+            Две позиции требуют уточнения стоимости
           </p>
         </div>
       </div>

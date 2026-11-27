@@ -111,20 +111,16 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
         </div>
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-slate-900">
-            {isNotice ? "Свой прайс не загружен" : "Свой прайс"}
+            {isNotice ? "Используется демонстрационный прайс" : "Свой прайс"}
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-slate-700">
             {isNotice ? (
               <>
-                Сейчас расчёт идёт по тестовому прайсу — цены в КП будут
-                демонстрационными. Загрузите прайс поставщика, и сметы начнут
-                считаться по вашим ценам.
+                Цены приведены для ознакомления. Загрузите прайс поставщика для расчёта коммерческих предложений.
               </>
             ) : (
               <>
-                Загрузите прайс поставщика — сметы будут считаться по вашим
-                ценам. Подойдёт .xlsx, .xls или .csv с колонками
-                «Наименование» и «Цена».
+                Выберите файл Excel или CSV с колонками «Наименование» и «Цена».
               </>
             )}
           </p>
@@ -160,7 +156,7 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
           <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
             <p className="text-sm font-medium text-slate-900">
               {isNotice
-                ? `Загрузить прайс файлом «${phase.file.name}»?`
+                ? `Загрузить прайс из файла «${phase.file.name}»?`
                 : `Заменить прайс файлом «${phase.file.name}»?`}
             </p>
             {/*
@@ -169,8 +165,8 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
             */}
             <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
               {isNotice
-                ? "Сметы, загруженные раньше, останутся, но их цены при следующем расчёте возьмутся из вашего прайса."
-                : "Текущий прайс будет удалён полностью и заменён новым. Сметы, загруженные раньше, останутся, но их цены при следующем расчёте возьмутся из нового прайса."}
+                ? "Новые расчёты будут использовать загруженный прайс. Ранее сформированные КП сохранят свои цены."
+                : "Новый файл полностью заменит текущий прайс. Ранее сформированные КП сохранят свои цены."}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -190,7 +186,7 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
         {phase.kind === "uploading" && (
           <p className="flex items-center gap-2 text-sm text-slate-600">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Разбираю файл и сохраняю позиции…
+            Загрузка прайса…
           </p>
         )}
 
@@ -204,7 +200,7 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
             </p>
             <ul className="mt-2 space-y-1 text-sm text-slate-700">
               <li>
-                Разобрано с размерами: {phase.result.quality.withDims} из{" "}
+                Распознаны размеры: {phase.result.quality.withDims} из{" "}
                 {phase.result.quality.total}
               </li>
               {/* Пропущенные строки показываем: это не ошибка, но человек
@@ -213,9 +209,9 @@ export function UploadPrice({ onUploaded, variant = "card" }: Props) {
                 <li>Пропущено строк без названия или цены: {phase.result.skipped}</li>
               )}
               <li>
-                Колонка с ценой: {columnLabel(phase.result.columns.price)}
+                Цена: {columnLabel(phase.result.columns.price)}
                 {" · "}
-                с названием: {columnLabel(phase.result.columns.name)}
+                Наименование: {columnLabel(phase.result.columns.name)}
               </li>
             </ul>
             {phase.result.warning && (

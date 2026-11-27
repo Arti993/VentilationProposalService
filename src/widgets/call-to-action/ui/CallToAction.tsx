@@ -24,16 +24,15 @@ export function CallToAction() {
         <div className="relative flex flex-col items-start justify-between gap-8 lg:flex-row lg:items-center">
           <div className="max-w-xl">
             <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Проверьте на своей смете
+              Рассчитайте стоимость по смете
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-accent-50/90">
-              Загрузите файл и получите КП за пару секунд. Без регистрации,
-              без настройки — демонстрационные сметы уже готовы.
+              Загрузите смету или выберите готовый пример. Для знакомства с сервисом доступен демонстрационный прайс.
             </p>
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-3">
-            <Link href="/app" className="btn-inverse btn-lg">
+            <Link prefetch={true} href="/app" className="btn-inverse btn-lg">
               Открыть приложение
               <ArrowRight className="h-4 w-4" />
             </Link>

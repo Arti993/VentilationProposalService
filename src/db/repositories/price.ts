@@ -8,7 +8,7 @@
  *
  * ОСОБЕННОСТЬ NEON (замерено, см. scripts/diag-limit.ts): пулер закрывает
  * соединение после 4-5 запросов. Поэтому каждый запрос идёт со своим
- * соединением через withRetry, а не через общий пул Drizzle.
+ * соединением через withRetry. Массовое чтение и замена прайса используют HTTP-драйвер Neon.
  *
  * ПРАЙС ПРИНАДЛЕЖИТ ОРГАНИЗАЦИИ
  *
@@ -21,6 +21,7 @@
  * первый загрузивший прайс подставил бы его всем остальным.
  */
 import { withRetry } from "../connection.ts";
+import { neon } from "@neondatabase/serverless";
 import type { PriceItem, ItemType } from "../../lib/price/normalize.ts";
 
 interface CacheEntry {
@@ -90,23 +91,7 @@ interface PriceRow {
   unparsed: string | null;
 }
 
-/**
- * Читает прайс организации из БД.
- *
- * Возвращает ту же структуру PriceItem, что и нормализатор — остальной код
- * (матчер, агент) не должен знать, откуда пришли данные.
- *
- * ВАЖНО: читаем постранично. Один SELECT на 215 строк кириллицей — это
- * ~29 КБ ответа, и пулер Neon рвёт соединение на таком объёме (замерено).
- *
- * Почему страница 30, а не 60. При 60 строках (~8 КБ) ответ проходит по
- * грани лимита: часть страниц рвётся, и каждый обрыв — это ретрай с паузой.
- * Замерено: загрузка всего прайса занимала 41 секунду при трёх обрывах
- * подряд. Страница в 30 строк (~4 КБ) идёт с запасом и не рвётся:
- * пусть запросов больше, зато ни одного ретрая.
- */
-const PAGE_SIZE = 30;
-
+/** Чтение без векторов одним HTTP-запросом; кэш остаётся отдельным для каждой организации. */
 export async function loadPrice(orgId: string): Promise<PriceItem[]> {
   const cache = cacheMap();
   const cached = cache.get(orgId);
@@ -114,53 +99,23 @@ export async function loadPrice(orgId: string): Promise<PriceItem[]> {
     return cached.items;
   }
 
-  const items: PriceItem[] = [];
-  let offset = 0;
-
-  for (;;) {
-    const page = await withRetry(
-      async (sql) => {
-        return sql<PriceRow[]>`
-          select code, raw_name, price, type, dims, angle, variant, unparsed
-            from price_items
-           where org_id = ${orgId}
-           order by code
-           limit ${PAGE_SIZE} offset ${offset}
-        `;
-      },
-      { label: `загрузка прайса (${offset})` },
-    );
-
-    for (const r of page) {
-      /**
-       * `jsonb` приходит СТРОКОЙ, а не массивом.
-       *
-       * Замерено: `pg_typeof(dims)` = jsonb, но `typeof` в JS даёт
-       * `"string"`, `Array.isArray` — `false`, значение — `"[315]"`.
-       * Раньше в комментарии здесь стояло «postgres.js возвращает jsonb
-       * уже разобранным» — это неверно, и цена ошибки большая: молча
-       * возвращался `[]`, матчер не находил размеров, и КП выходило без
-       * цен. Демо-прайс проходил только потому, что читался другими
-       * путями.
-       *
-       * Поэтому разбираем обе формы: строка JSON и готовый массив.
-       */
-      const dims = parseDims(r.dims);
-      items.push({
-        id: r.code,
-        rawName: r.raw_name,
-        price: Number(r.price),
-        type: r.type as ItemType,
-        dims,
-        angle: r.angle ?? undefined,
-        variant: r.variant ?? undefined,
-        unparsed: r.unparsed ?? undefined,
-      });
-    }
-
-    if (page.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL не задан");
+  const sql = neon(url);
+  const rows = await sql.query(`
+    select code, raw_name, price, type, dims, angle, variant, unparsed
+      from price_items where org_id = $1 order by code
+  `, [orgId], { fetchOptions: { signal: AbortSignal.timeout(15_000) } }) as PriceRow[];
+  const items: PriceItem[] = rows.map((r) => ({
+    id: r.code,
+    rawName: r.raw_name,
+    price: Number(r.price),
+    type: r.type as ItemType,
+    dims: parseDims(r.dims),
+    angle: r.angle ?? undefined,
+    variant: r.variant ?? undefined,
+    unparsed: r.unparsed ?? undefined,
+  }));
 
   // Вытесняем самый старый, если перебрали лимит
   if (cache.size >= MAX_CACHED_ORGS && !cache.has(orgId)) {
@@ -228,107 +183,62 @@ export async function priceStatsByOrg(): Promise<
 }
 
 /**
- * Заменяет прайс организации целиком.
- *
- * Почему целиком, а не «добавить недостающие»: прайс — это снимок на дату.
- * Если поставщик убрал позицию, она должна исчезнуть, а не остаться с
- * прошлой ценой. Именно поэтому `delete` идёт первым.
- *
- * Почему не в транзакции: вторая запись внутри транзакции рвёт соединение
- * с Neon (docs/INCIDENT-SIGNUP.md). Поэтому удаление и вставка — отдельные
- * запросы. Плата: если вставка сорвётся, прайс останется пустым. Это
- * лечится повторной загрузкой, а «старые и новые цены вперемешку» —
- * нет: клиент увидел бы и устаревшие цены тоже.
- *
- * ЗАЧЕМ ЗДЕСЬ ОТДЕЛЬНЫЙ ПУТЬ ДЛЯ ВЕКТОРОВ
- *
- * Писать вектор в той же порции, что и прайс, заманчиво: одна операция
- * вместо двух. На этой базе так делать нельзя, и это проверено, а не
- * предположено.
- *
- * Измерения:
- *
- *  - `update price_items set embedding = …` — обрыв через 19-27 с
- *    (`write CONNECTION_CLOSED`), независимо от размера вектора: и на
- *    16 измерениях (312 байт), и на 1024 (21 КБ), и в пустой таблице без
- *    единого индекса.
- *  - `insert` с вектором в свежем соединении — обычно 570-900 мс, но
- *    воспроизводимо падает, если перед ним на том соединении был `delete`
- *    и затем пауза (вызов эмбеддингов идёт ~1-3 с по HTTP). Падение
- *    случается около половины прогонов, без видимой закономерности.
- *  - падение происходит уже ПОСЛЕ записи: строка в базе есть, вектор
- *    есть, а подтверждение не дошло.
- *
- * Цена ошибки слишком высока: при удалении и вставке в одной функции
- * сбой на вставке оставлял организацию БЕЗ прайса — было воспроизведено,
- * позиции p001…p003 удалялись и не возвращались. Ради ускорения поиска
- * по смыслу так рисковать нельзя.
- *
- * Поэтому:
- *
- *   1. Здесь — только надёжный путь: `delete` + `insert` без векторов.
- *      Он стабилен, занимает 1-3 секунды на 215 позиций.
- *   2. Векторы пишет `indexPriceInBackground` (см. priceIndex.ts),
- *      отдельно и после ответа клиенту. Если она упадёт, прайс останется
- *      целым, просто без векторов: точный матчинг (тип + размеры) от них
- *      не зависит, а сложные формулировки временно уйдут в «требует
- *      проверки» — безопасный отказ.
+ * Пакетная замена одним HTTP-запросом к Neon, без соединения на каждую строку.
+ * Все SQL-команды выполняются в одной транзакции: ошибка любого пакета
+ * откатывает удаление старого прайса и обновление сведений о файле.
  */
 export async function replacePrice(
   orgId: string,
   items: PriceItem[],
+  fileName?: string,
 ): Promise<{ inserted: number; removed: number }> {
-  const removed = await withRetry(
-    async (sql) => {
-      const rows = await sql<{ code: string }[]>`
-        delete from price_items where org_id = ${orgId} returning code
-      `;
-      return rows.length;
-    },
-    { label: "очистка прайса", heavy: true },
-  );
-
-  let inserted = 0;
-  for (const item of items) {
-    /**
-     * `dims_key` — размеры через дробь, по нему идёт точный поиск
-     * (`price_items_type_dims_idx`). Собираем здесь, а не в базе:
-     * генерируемого столбца нет, и без значения вставка падает с
-     * `violates not-null constraint`. Пустые размеры дают пустую строку —
-     * это легально и означает «позиция без размеров».
-     */
-    const dimsKey = item.dims.join("/");
-
-    /**
-     * `?? null` обязателен: у только что нормализованной позиции `angle`,
-     * `variant` и `unparsed` — `undefined`, а не `null`. `postgres.js`
-     * трактует `undefined` как «значение не задано» и подставляет
-     * `DEFAULT`, из-за чего запрос может прийти с несогласованным числом
-     * параметров.
-     */
-    await withRetry(
-      async (sql) => {
-        await sql`
-          insert into price_items
-            (org_id, code, raw_name, price, type, dims_key, dims, angle, variant, unparsed)
-          values (
-            ${orgId}, ${item.id}, ${item.rawName}, ${item.price}, ${item.type},
-            ${dimsKey}, ${JSON.stringify(item.dims)}::jsonb, ${item.angle ?? null},
-            ${item.variant ?? null}, ${item.unparsed ?? null}
-          )
-          on conflict (org_id, code) do update
-             set raw_name = excluded.raw_name,
-                 price    = excluded.price,
-                 type     = excluded.type,
-                 dims     = excluded.dims,
-                 dims_key = excluded.dims_key
-        `;
-      },
-      { label: `вставка позиции ${item.id}` },
-    );
-    inserted += 1;
+  if (!orgId) throw new Error("Не указана организация прайса");
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL не задан");
+  const sql = neon(url);
+  const queries = [
+    sql`select set_config('statement_timeout', '40s', true),
+               set_config('lock_timeout', '5s', true),
+               set_config('idle_in_transaction_session_timeout', '10s', true),
+               set_config('transaction_timeout', '45s', true)`,
+    // Одновременные загрузки одной организации не могут перемешать прайсы.
+    sql`select pg_advisory_xact_lock(hashtextextended(${orgId}, 0))`,
+    sql`with removed as (
+          delete from price_items where org_id = ${orgId} returning 1
+        ) select count(*)::int as n from removed`,
+  ];
+  for (let offset = 0; offset < items.length; offset += 250) {
+    const batch = items.slice(offset, offset + 250).map((item) => ({
+      code: item.id,
+      raw_name: item.rawName,
+      price: item.price,
+      type: item.type,
+      dims_key: item.dims.join("/"),
+      dims: item.dims,
+      angle: item.angle ?? null,
+      variant: item.variant ?? null,
+      unparsed: item.unparsed ?? null,
+    }));
+    queries.push(sql`
+      insert into price_items (org_id, code, raw_name, price, type, dims_key, dims, angle, variant, unparsed)
+      select ${orgId}, r.code, r.raw_name, r.price, r.type, r.dims_key, r.dims, r.angle, r.variant, r.unparsed
+        from jsonb_to_recordset(${JSON.stringify(batch)}::jsonb) as r(
+          code text, raw_name text, price numeric(12,2), type text, dims_key text,
+          dims jsonb, angle integer, variant text, unparsed text
+        )
+    `);
   }
-
+  if (fileName !== undefined) {
+    queries.push(sql`
+      insert into price_meta (org_id, file_name, item_count, uploaded_at)
+      values (${orgId}, ${fileName}, ${items.length}, now())
+      on conflict (org_id) do update
+        set file_name = excluded.file_name, item_count = excluded.item_count, uploaded_at = excluded.uploaded_at
+    `);
+  }
+  const results = await sql.transaction(queries, {
+    fetchOptions: { signal: AbortSignal.timeout(45_000) },
+  });
   invalidatePriceCache(orgId);
-  return { inserted, removed };
+  return { inserted: items.length, removed: Number(results[2]?.[0]?.n ?? 0) };
 }

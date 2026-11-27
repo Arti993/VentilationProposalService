@@ -22,19 +22,14 @@ import { UserMenu } from "@widgets/user-menu";
 import { SummaryCards } from "@widgets/estimate-summary";
 import { EstimateTable } from "@widgets/estimate-table";
 import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
+import { STATUS_STYLES } from "@entities/estimate/model/status";
 import type { EstimateSession, EstimatePosition } from "@entities/estimate/model/types";
 
 type Session = EstimateSession & { id: string };
 
 export interface ProposalPageProps {
-  /**
-   * Кто пришёл — известно на сервере (`/app` читает сессию).
-   *
-   * `null` — гость. Передаётся пропсом, а не запрашивается в браузере:
-   * иначе шапка показывала бы «Войти» вошедшему человеку, пока идёт
-   * запрос.
-   */
-  user: { name: string; email: string; image: string | null } | null;
+  /** undefined — меню загрузит сессию отдельно от формы сметы. */
+  user?: { name: string; email: string; image: string | null } | null;
 }
 
 export function ProposalPage({ user }: ProposalPageProps) {
@@ -110,7 +105,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
 
   const selectPosition = (p: EstimatePosition) => {
     setPendingQuestion(
-      `Почему позиция ${p.posNo} («${p.name}») получила статус «${p.status}»?`,
+      `Почему позиция ${p.posNo} («${p.name}») получила статус «${STATUS_STYLES[p.status].label}»?`,
     );
     // На телефоне чат ниже таблицы: без прокрутки человек нажимает
     // строку и не видит, что что-то произошло
@@ -121,15 +116,15 @@ export function ProposalPage({ user }: ProposalPageProps) {
 
   const suggestions = session
     ? [
-        "Какой итог по этой смете?",
-        "Сколько позиций не нашлось и какие?",
-        "Что требует проверки менеджера?",
-        "Дай сводку для отправки клиенту",
+        "Какова итоговая стоимость сметы?",
+        "Какие позиции не найдены в прайсе?",
+        "Какие позиции требуют проверки?",
+        "Подготовьте краткую сводку для клиента",
       ]
     : [
         "Сколько стоит тройник 315/200?",
         "Какие размеры ниппелей есть в прайсе?",
-        "Есть ли отвод 90 градусов на 450?",
+        "Есть ли отвод 90° диаметром 450 мм?",
       ];
 
   return (
@@ -188,8 +183,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
                 Загрузите смету клиента
               </h1>
               <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-600 sm:text-base">
-                Сопоставим каждую позицию с прайсом и соберём готовое КП.
-                Цена появится только там, где совпадение однозначное.
+                Загрузите файл для сопоставления позиций с прайсом и расчёта стоимости.
               </p>
             </div>
 
@@ -204,7 +198,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
               и после загрузки она выглядела точно так же: человек не мог
               понять, применился файл или нет. Хуже того, рядом с ежедневной
               работой постоянно стояла кнопка, заменяющая рабочий прайс.
-              
+
               Теперь блок говорит ровно одно: «считаем по тестовому» — и
               уходит, как только появился свой. Замена прайса живёт в
               кабинете, где её не нажмут случайно.
@@ -232,9 +226,8 @@ export function ProposalPage({ user }: ProposalPageProps) {
                   Прайс загружен: {justUploaded.inserted} позиций
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                  Файл «{justUploaded.fileName}» принят. Дальше сметы считаются
-                  по вашим ценам. Заменить файл можно в{" "}
-                  <Link href="/account" className="font-medium text-accent-700 hover:underline">
+                  Файл «{justUploaded.fileName}» используется для новых расчётов. Заменить прайс можно в{" "}
+                  <Link prefetch={true} href="/account" className="font-medium text-accent-700 hover:underline">
                     настройках аккаунта
                   </Link>
                   .
@@ -247,17 +240,17 @@ export function ProposalPage({ user }: ProposalPageProps) {
               {[
                 {
                   h: "Excel",
-                  t: "Любой лист книги, шапка может быть не сверху",
+                  t: "Поддерживаются книги с несколькими листами",
                   icon: FileSpreadsheet,
                 },
                 {
                   h: "Word",
-                  t: "Таблица из документа — количества сохранятся",
+                  t: "Таблицы с наименованиями и количеством",
                   icon: FileType2,
                 },
                 {
                   h: "CSV или текст",
-                  t: "Разделители и кодировку определим сами",
+                  t: "Автоматическое определение кодировки и разделителей",
                   icon: FileText,
                 },
               ].map((x) => (

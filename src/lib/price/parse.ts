@@ -240,7 +240,7 @@ export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
     return {
       ok: false,
       error: "Таблица пустая",
-      hint: "Проверьте, что данные на первом листе, а не на втором.",
+      hint: "Разместите позиции прайса на первом листе файла.",
     };
   }
 
@@ -274,10 +274,10 @@ export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
   if (headerRow < 0) {
     return {
       ok: false,
-      error: "Не нашёл колонки «Наименование» и «Цена»",
+      error: "Не найдены колонки «Наименование» и «Цена»",
       hint:
         "В первой строке прайса должны быть заголовки: «Наименование» и «Цена». " +
-        "Если они называются иначе, переименуйте колонки или напишите мне — добавлю синоним.",
+        "Переименуйте соответствующие колонки и повторите загрузку.",
     };
   }
 
@@ -337,13 +337,13 @@ export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
 
     items.push(normalized);
 
-    if (items.length >= MAX_PRICE_ITEMS) {
+    if (items.length > MAX_PRICE_ITEMS) {
       return {
         ok: false,
         error: `В прайсе больше ${MAX_PRICE_ITEMS} позиций`,
         hint:
           "Загрузите часть прайса — например, только нужные разделы. " +
-          "Ограничение связано с бесплатным тарифом: больший файл не успеет обработаться.",
+          "Оставьте в файле только необходимые разделы прайса.",
       };
     }
   }
@@ -351,9 +351,9 @@ export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
   if (items.length === 0) {
     return {
       ok: false,
-      error: "Ни одной позиции с ценой",
+      error: "Не найдены позиции с ценой",
       hint:
-        "Все строки пустые или в колонке цены не числа. Проверьте, что цены записаны " +
+        "Проверьте, что строки содержат наименования, а цены записаны " +
         "как числа (например 1250 или 1250,50), а не как «по запросу».",
     };
   }

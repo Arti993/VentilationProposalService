@@ -25,6 +25,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, LogIn, Settings } from "lucide-react";
 import { Avatar } from "@shared/ui/Avatar";
 import { getCurrentUser, type AuthUser } from "@features/auth/api/client";
@@ -49,6 +50,7 @@ export interface UserMenuProps {
 type Shown = { name: string; email: string; image: string | null } | null | undefined;
 
 export function UserMenu({ user }: UserMenuProps) {
+  const router = useRouter();
   const [fetched, setFetched] = useState<AuthUser | null | undefined>(
     user === undefined ? undefined : null,
   );
@@ -111,7 +113,7 @@ export function UserMenu({ user }: UserMenuProps) {
    */
   if (!shown) {
     return (
-      <Link href="/login" className="btn-secondary gap-1.5 px-3 py-1.5 text-xs sm:text-sm">
+      <Link prefetch={true} href="/login" className="btn-secondary gap-1.5 px-3 py-1.5 text-xs sm:text-sm">
         <LogIn className="h-3.5 w-3.5" aria-hidden />
         Войти
       </Link>
@@ -123,6 +125,8 @@ export function UserMenu({ user }: UserMenuProps) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        onPointerEnter={() => router.prefetch("/account")}
+        onFocus={() => router.prefetch("/account")}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Аккаунт: ${shown.name}. Открыть меню`}
@@ -155,7 +159,7 @@ export function UserMenu({ user }: UserMenuProps) {
             <p className="mt-0.5 truncate text-xs text-slate-500">{shown.email}</p>
           </div>
           <Link
-            href="/account"
+            prefetch={true} href="/account"
             role="menuitem"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 transition-colors hover:bg-slate-50"

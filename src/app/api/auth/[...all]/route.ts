@@ -75,7 +75,7 @@ function validateProfileUpdate(body: unknown): string | null {
   }
 
   if (image !== undefined && !isAcceptableImage(image)) {
-    return "Аватар должен быть картинкой PNG, JPEG или WebP до 200 КБ.";
+    return "Выберите изображение PNG, JPEG или WebP размером до 200 КБ.";
   }
 
   return null;
@@ -130,7 +130,7 @@ export async function POST(request: Request): Promise<Response> {
       {
         code: "CREATED_NEEDS_LOGIN",
         message:
-          "Аккаунт создан, но ответ не дошёл. Войдите с тем же паролем — всё на месте.",
+          "Аккаунт создан. Войдите с тем же паролем.",
       },
       { status: 409 },
     );

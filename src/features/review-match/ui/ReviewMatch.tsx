@@ -25,6 +25,7 @@
  * этот риск.
  */
 
+import { requestErrorMessage } from "@shared/lib/errors";
 import { useMemo, useState } from "react";
 import { Check, X, Search, Loader2, Lightbulb } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -110,7 +111,7 @@ export function ReviewMatch({ position, price, estimateId }: ReviewMatchProps) {
       setDone(true);
       setOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось сохранить");
+      setError(requestErrorMessage(e, "Не удалось сохранить выбор. Попробуйте ещё раз."));
     } finally {
       setBusy(false);
     }
@@ -120,7 +121,7 @@ export function ReviewMatch({ position, price, estimateId }: ReviewMatchProps) {
     return (
       <p className="mt-2 flex items-center gap-1.5 text-2xs text-emerald-700">
         <Check className="h-3 w-3" aria-hidden />
-        Спасибо — учтём в следующих сметах
+        Выбор сохранён для следующих расчётов
       </p>
     );
   }
@@ -133,7 +134,7 @@ export function ReviewMatch({ position, price, estimateId }: ReviewMatchProps) {
         className="mt-2 inline-flex items-center gap-1.5 text-2xs font-medium text-accent-700 underline-offset-2 hover:underline"
       >
         <Lightbulb className="h-3 w-3" aria-hidden />
-        Подсказать правильную позицию
+        Уточнить соответствие
       </button>
     );
   }
@@ -142,7 +143,7 @@ export function ReviewMatch({ position, price, estimateId }: ReviewMatchProps) {
     <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-2xs font-medium text-slate-700">
-          Какая позиция прайса подходит?
+          Выберите позицию прайса
         </p>
         <button
           type="button"
@@ -171,7 +172,7 @@ export function ReviewMatch({ position, price, estimateId }: ReviewMatchProps) {
       <ul className="mt-2 space-y-1">
         {filtered.length === 0 && (
           <li className="px-1 py-2 text-2xs text-slate-500">
-            Похожих позиций нет. Уточните запрос или отметьте, что позиции в прайсе нет.
+            Позиции не найдены. Измените запрос или выберите «Позиции в прайсе нет».
           </li>
         )}
         {filtered.map((p) => (

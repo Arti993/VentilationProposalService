@@ -25,10 +25,11 @@
  */
 
 import { Activity } from "lucide-react";
+import { Suspense } from "react";
+import { unstable_cache } from "next/cache";
 import { productMetrics, type ProductMetrics } from "@/db/repositories/metrics";
 import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import { UserMenu } from "@widgets/user-menu";
-import { getActor } from "@/lib/auth/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export const dynamic = "force-dynamic";
  * «обдолбить» запросами, нагрузив базу. Минута — компромисс: числа
  * выглядят живыми, база дышит.
  */
-export const revalidate = 60;
+const cachedMetrics = unstable_cache(productMetrics, ["public-product-metrics"], { revalidate: 60 });
 
 /** Форматирует миллисекунды в человекочитаемое время. */
 function formatMs(ms: number | null): string {
@@ -94,7 +95,7 @@ function DistributionBar({ m }: { m: ProductMetrics }) {
     { key: "priced", label: "с ценой", value: m.positionsPriced, color: "bg-emerald-500" },
     { key: "human", label: "на проверку", value: m.positionsNeedsHuman, color: "bg-amber-500" },
     { key: "notfound", label: "нет в прайсе", value: m.positionsNotFound, color: "bg-slate-400" },
-    { key: "offtopic", label: "не по теме", value: m.positionsOffTopic, color: "bg-slate-300" },
+    { key: "offtopic", label: "прочие строки", value: m.positionsOffTopic, color: "bg-slate-300" },
   ].filter((s) => s.value > 0);
 
   return (
@@ -124,61 +125,34 @@ function DistributionBar({ m }: { m: ProductMetrics }) {
   );
 }
 
-export default async function StatusPage() {
-  /**
-   * Ошибка базы не должна давать 500 на публичной странице: посетитель
-   * увидит белую страницу с кодом, и решит, что сервис не работает.
-   * Лучше сказать честно, что метрики временно недоступны.
-   */
+function MetricsSkeleton() {
+  return (
+    <div className="mt-8 grid gap-4 sm:grid-cols-3" role="status" aria-label="Загрузка статистики">
+      {[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-2xl bg-slate-200/60" aria-hidden />)}
+      <span className="sr-only">Загружаем статистику…</span>
+    </div>
+  );
+}
+
+async function StatusMetrics() {
   let metrics: ProductMetrics | null = null;
   let error: string | null = null;
 
   try {
-    metrics = await productMetrics();
+    const saved = await cachedMetrics();
+    metrics = { ...saved, computedAt: new Date(saved.computedAt) };
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
     console.error("[status]", error);
   }
 
-  /**
-   * Пользователь читается здесь, потому что страница и так динамическая
-   * (метрики считаются на каждый заход). Это даёт шапке готовое состояние
-   * в первом же HTML — без мигания «Войти» у вошедшего человека.
-   */
-  const actor = await getActor();
-  const user =
-    actor && !actor.isAnonymous && actor.email
-      ? { name: actor.name.trim() || actor.email, email: actor.email, image: actor.image }
-      : null;
-
-  return (
-    <div className="min-h-screen bg-slate-50/70">
-      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <HeaderBar>
-          <HeaderBrand />
-          <UserMenu user={user} />
-        </HeaderBar>
-      </header>
-
-      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-        <div className="flex items-center gap-2.5">
-          <Activity className="h-5 w-5 text-accent-600" aria-hidden />
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Как работает сервис
-          </h1>
-        </div>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Числа считаются из тех же таблиц, что и сама работа. Здесь нет ни
-          одной цены, названия позиции или суммы по клиенту — только агрегаты.
-        </p>
-
+  return <>
         {error && (
           <div
             className="mt-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
             role="alert"
           >
-            Метрики временно недоступны. Работа сервиса это не затрагивает —
-            сметы считаются как обычно.
+            Статистика временно недоступна. Обновите страницу позже.
           </div>
         )}
 
@@ -194,25 +168,23 @@ export default async function StatusPage() {
               />
               <StatCard
                 value={formatPercent(metrics.deterministicShare)}
-                label="решено без модели"
-                hint="Точное совпадение по типу и размерам — мгновенно и бесплатно"
+                label="сопоставлено по точным параметрам"
+                hint="Соответствие по типу оборудования и размерам"
               />
               <StatCard
                 value={formatMs(metrics.medianMs)}
                 label="медиана обработки сметы"
-                hint="От файла до готового КП"
+                hint="От загрузки файла до результата расчёта"
               />
             </div>
 
             {/* ── Распределение ─────────────────────────────── */}
             <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
-                Что происходит с позициями
+                Результаты сопоставления
               </h2>
               <p className="mt-1 text-2xs leading-relaxed text-slate-500">
-                Система ставит цену только при однозначном совпадении. Если
-                непонятно — позиция уходит на проверку, а не получает
-                случайную цену.
+                Цены рассчитаны для позиций с однозначным соответствием в прайсе. Остальные строки требуют проверки или уточнения стоимости.
               </p>
               <div className="mt-4">
                 <DistributionBar m={metrics} />
@@ -238,49 +210,39 @@ export default async function StatusPage() {
               />
               <StatCard
                 value={formatNumberRu(metrics.feedbackApplied)}
-                label="синонимов выучено от менеджеров"
-                hint="Подтверждённые разборы спорных строк"
+                label="уточнений учтено в расчётах"
+                hint="Сохранённые соответствия позиций прайса"
               />
             </div>
 
             {/* ── Честность ────────────────────────────────── */}
             <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
-                Что эти числа значат
+                О показателях
               </h2>
               <dl className="mt-3 space-y-3 text-sm leading-relaxed text-slate-600">
                 <div>
                   <dt className="font-medium text-slate-800">
-                    «решено без модели» — главная метрика
+                    Точное сопоставление
                   </dt>
                   <dd className="mt-0.5">
-                    Детерминированный матчинг отвечает за {formatPercent(metrics.deterministicShare)}{" "}
-                    позиций. Он бесплатен, мгновенен и одинаков при каждом
-                    запуске. Модель подключается только там, где точное
-                    совпадение не сработало, — и никогда не назначает цену
-                    сама.
+                    Для {formatPercent(metrics.deterministicShare)}{" "} позиций найдено соответствие по точным параметрам. Для остальных выполняется дополнительный поиск подходящих вариантов.
                   </dd>
                 </div>
                 <div>
                   <dt className="font-medium text-slate-800">
-                    Почему не 100% автоматически
+                    Проверка спорных позиций
                   </dt>
                   <dd className="mt-0.5">
-                    Это осознанный выбор. Ошибочный матч дороже отсутствия
-                    матча: по отсутствующей цене менеджер пойдёт уточнять, а
-                    по ошибочной — выставит счёт. Поэтому спорные строки
-                    остаются человеку.
+                    Если данных недостаточно для однозначного соответствия, строка передаётся на проверку менеджеру. Цена не подставляется до уточнения.
                   </dd>
                 </div>
                 <div>
                   <dt className="font-medium text-slate-800">
-                    Откуда берутся синонимы
+                    Уточнения менеджеров
                   </dt>
                   <dd className="mt-0.5">
-                    Менеджер разбирает спорную строку и подтверждает, какая
-                    позиция прайса имелась в виду. Из таких пар собирается
-                    словарь организации: в следующий раз система найдёт цену
-                    сама.
+                    Подтверждённые соответствия сохраняются для организации и используются при обработке следующих смет.
                   </dd>
                 </div>
               </dl>
@@ -298,8 +260,35 @@ export default async function StatusPage() {
         )}
 
         {!metrics && !error && (
-          <p className="mt-8 text-sm text-slate-500">Считаю метрики…</p>
+          <p className="mt-8 text-sm text-slate-500">Загрузка статистики…</p>
         )}
+  </>;
+}
+
+export default function StatusPage() {
+  return (
+    <div className="min-h-screen bg-slate-50/70">
+      <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
+        <HeaderBar>
+          <HeaderBrand />
+          <UserMenu />
+        </HeaderBar>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="flex items-center gap-2.5">
+          <Activity className="h-5 w-5 text-accent-600" aria-hidden />
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            Статистика сервиса
+          </h1>
+        </div>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+          Общая статистика обработки смет. Данные об отдельных клиентах, оборудовании и стоимости заказов не публикуются.
+        </p>
+
+        <Suspense fallback={<MetricsSkeleton />}>
+          <StatusMetrics />
+        </Suspense>
       </main>
     </div>
   );

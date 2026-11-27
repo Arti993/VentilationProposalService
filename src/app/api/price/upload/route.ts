@@ -28,7 +28,7 @@ import { getActor, denied } from "@/lib/auth/guard.ts";
 import { isDemoOrg } from "@/lib/auth/org.ts";
 import { parsePriceWorkbook, describeQuality } from "@/lib/price/parse.ts";
 import { replacePrice, countPrice, loadPrice } from "@/db/repositories/price.ts";
-import { savePriceMeta, getPriceMeta } from "@/db/repositories/priceMeta.ts";
+import { getPriceMeta } from "@/db/repositories/priceMeta.ts";
 import { indexPriceInBackground } from "@/db/repositories/priceIndex.ts";
 
 export const runtime = "nodejs";
@@ -49,8 +49,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Нужен вход",
-        hint: "Прайс привязан к организации. Войдите или зарегистрируйтесь — это бесплатно.",
+        error: "Войдите в аккаунт",
+        hint: "Для загрузки прайса войдите в аккаунт или зарегистрируйтесь.",
         /**
          * Машиночитаемый признак «дело в авторизации».
          *
@@ -70,10 +70,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Демо-прайс менять нельзя",
+        error: "Демонстрационный прайс доступен только для просмотра",
         hint:
-          "Он общий для всех посетителей. Зарегистрируйтесь — получите свою организацию " +
-          "и загрузите прайс поставщика.",
+          "Создайте аккаунт, чтобы загрузить прайс поставщика.",
         // Тот же признак: человеку нужно завести аккаунт, и интерфейс
         // предложит кнопку, а не просто совет
         needAuth: true,
@@ -87,8 +86,8 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "У аккаунта нет организации",
-        hint: "Напишите мне — это ошибка регистрации, исправлю.",
+        error: "Организация аккаунта не найдена",
+        hint: "Повторите вход в аккаунт. Если ошибка сохраняется, повторите попытку позже.",
       },
       { status: 409 },
     );
@@ -125,8 +124,7 @@ export async function POST(request: Request) {
         ok: false,
         error: `Файл больше ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} МБ`,
         hint:
-          "Загрузите часть прайса — например, только нужные разделы. " +
-          "Или пришлите файл мне, добавлю поддержку больших файлов через фоновую обработку.",
+          "Уменьшите размер файла: оставьте только необходимые разделы и повторите загрузку.",
       },
       { status: 413 },
     );
@@ -154,7 +152,7 @@ export async function POST(request: Request) {
 
   let replaced: { inserted: number; removed: number };
   try {
-    replaced = await replacePrice(actor.orgId, parsed.items);
+    replaced = await replacePrice(actor.orgId, parsed.items, file.name);
   } catch (e) {
     console.error(
       "[price] не удалось сохранить прайс:",
@@ -165,31 +163,13 @@ export async function POST(request: Request) {
         ok: false,
         error: "Не удалось сохранить прайс",
         hint:
-          "Файл разобран правильно, но база не приняла данные. " +
-          "Повторите загрузку — старая версия прайса при этом не пострадала, " +
-          "если ошибка была на этапе очистки; если на вставке, прайс мог остаться пустым.",
+          "Не удалось подтвердить загрузку прайса. Проверьте его состояние и при необходимости повторите загрузку.",
       },
       { status: 500 },
     );
   }
 
   const quality = describeQuality(parsed.items);
-
-  /**
-   * Запоминаем имя файла и дату.
-   *
-   * Отдельным try: прайс уже сохранён, и падение этой записи не должно
-   * превращать успешную загрузку в ошибку. Кабинет в худшем случае не
-   * покажет имя файла — но покажет, что прайс загружен.
-   */
-  try {
-    await savePriceMeta(actor.orgId, file.name, replaced.inserted);
-  } catch (e) {
-    console.error(
-      "[price] не удалось записать сведения о прайсе:",
-      e instanceof Error ? e.message : e,
-    );
-  }
 
   /**
    * Индексация — в фоне, без ожидания.

@@ -6,6 +6,7 @@
  * Агент помнит смету через sessionId: браузер передаёт только ID,
  * данные берутся на сервере. Поэтому подменить цены в запросе нельзя.
  */
+import { requestErrorMessage } from "@shared/lib/errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Loader2, Sparkles, Bot, User, Check } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -77,6 +78,9 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [followups, setFollowups] = useState<string[]>([]);
+  const conversationRef = useRef<string | null>(null);
+  const sendingRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Шаги текущего ответа: «смотрю прайс», «готовлю ответ» */
@@ -90,7 +94,9 @@ export function ChatPanel({
   const send = useCallback(
     async (question: string) => {
       const q = question.trim();
-      if (!q || busy) return;
+      if (!q || sendingRef.current) return;
+      sendingRef.current = true;
+      conversationRef.current ??= crypto.randomUUID();
 
       setError(null);
       setInput("");
@@ -103,7 +109,7 @@ export function ChatPanel({
         // что показать модели. Браузер присылает только новые слова.
         const res = await askAgent(q, {
           sessionId,
-          conversationId: sessionId,
+          conversationId: sessionId ?? conversationRef.current,
           /**
            * Шаг приходит дважды: `start` и `done`. Обновляем запись по
            * `id`, а не добавляем новую — иначе список превратился бы в
@@ -119,14 +125,16 @@ export function ChatPanel({
             }),
         });
         setMessages((m) => [...m, { role: "assistant", text: res.answer, ms: res.ms }]);
+        setFollowups(res.suggestions ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Ошибка чата");
+        setError(requestErrorMessage(e, "Не удалось получить ответ. Попробуйте ещё раз."));
       } finally {
+        sendingRef.current = false;
         setBusy(false);
         setSteps([]);
       }
     },
-    [busy, sessionId],
+    [sessionId],
   );
 
   // Внешний вопрос (клик по позиции в таблице) — задаём один раз
@@ -149,9 +157,9 @@ export function ChatPanel({
               <Sparkles className="h-5 w-5 text-accent-600" />
             </div>
             <div>
-              <p className="font-medium text-slate-900">Спросите про смету или прайс</p>
+              <p className="font-medium text-slate-900">Вопросы по смете и прайсу</p>
               <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-                Цены берутся только из прайса — выдумывать агент не умеет
+                Уточните наличие оборудования, стоимость или причины отсутствия цены.
               </p>
             </div>
           </div>
@@ -221,7 +229,7 @@ export function ChatPanel({
               {steps.length === 0 ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-500" />
-                  <span className="text-sm text-slate-500">Думаю…</span>
+                  <span className="text-sm text-slate-500">Подготовка ответа…</span>
                 </div>
               ) : (
                 <ul className="space-y-1.5" aria-live="polite">
@@ -261,9 +269,9 @@ export function ChatPanel({
         )}
       </div>
 
-      {messages.length === 0 && suggestions.length > 0 && (
+      {!busy && (messages.length === 0 ? suggestions : followups).length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
-          {suggestions.map((s) => (
+          {(messages.length === 0 ? suggestions : followups).map((s) => (
             <button
               key={s}
               // type="button" обязателен: подсказки стоят рядом с формой
@@ -291,7 +299,7 @@ export function ChatPanel({
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Например: почему позиция 12 без цены?"
+          placeholder={messages.length === 0 ? "Задайте вопрос по смете или прайсу" : "Продолжите диалог…"}
           className="field !rounded-xl !py-2.5 !text-sm"
           aria-label="Вопрос ассистенту"
         />
