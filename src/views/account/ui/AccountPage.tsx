@@ -12,9 +12,8 @@
  * загрузке файла, она только расставляет блоки. Так у неё нет причин
  * меняться, когда меняется форма.
  */
-import Link from "next/link";
-import { ArrowLeft, UserRound } from "lucide-react";
-import { Logo } from "@shared/ui/Logo";
+import { UserRound } from "lucide-react";
+import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import { UserMenu } from "@widgets/user-menu";
 import { AccountSettings, PriceCard } from "@features/account-settings";
 
@@ -33,26 +32,10 @@ export function AccountPage({ user, price }: AccountPageProps) {
   return (
     <div className="min-h-screen bg-slate-50/70">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link
-              href="/app"
-              aria-label="К расчёту сметы"
-              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden min-[400px]:inline">К расчёту</span>
-            </Link>
-            <span className="hidden h-5 w-px bg-slate-200 sm:block" aria-hidden />
-            <span className="sm:hidden">
-              <Logo withWordmark={false} />
-            </span>
-            <span className="hidden sm:block">
-              <Logo />
-            </span>
-          </div>
+        <HeaderBar>
+          <HeaderBrand />
           <UserMenu user={user} />
-        </div>
+        </HeaderBar>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">

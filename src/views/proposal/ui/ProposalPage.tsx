@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, FileText, FileType2, Plus } from "lucide-react";
 import { UploadEstimate } from "@features/upload-estimate";
 import { UploadPrice, fetchPriceInfo, fetchPriceItems } from "@features/upload-price";
 import type { PriceInfo, PriceItem } from "@features/upload-price/api/client";
@@ -21,7 +21,7 @@ import { ChatPanel } from "@features/send-chat-message";
 import { UserMenu } from "@widgets/user-menu";
 import { SummaryCards } from "@widgets/estimate-summary";
 import { EstimateTable } from "@widgets/estimate-table";
-import { Logo } from "@shared/ui/Logo";
+import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import type { EstimateSession, EstimatePosition } from "@entities/estimate/model/types";
 
 type Session = EstimateSession & { id: string };
@@ -136,26 +136,8 @@ export function ProposalPage({ user }: ProposalPageProps) {
     <div className="min-h-screen bg-slate-50/70">
       {/* ── Шапка приложения ───────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1500px] items-center justify-between gap-3 px-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <Link
-              href="/"
-              className="hidden shrink-0 items-center gap-1.5 text-xs font-medium text-slate-500
-                         transition-colors hover:text-slate-900 sm:flex"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              На главную
-            </Link>
-            <span className="hidden h-5 w-px bg-slate-200 sm:block" aria-hidden />
-            <span className="min-w-0">
-              <span className="sm:hidden">
-                <Logo withWordmark={false} />
-              </span>
-              <span className="hidden sm:block">
-                <Logo />
-              </span>
-            </span>
-          </div>
+        <HeaderBar>
+          <HeaderBrand compact={Boolean(session)} />
 
           <div className="flex shrink-0 items-center gap-2">
             {session ? (
@@ -163,10 +145,11 @@ export function ProposalPage({ user }: ProposalPageProps) {
                 <DownloadProposal
                   sessionId={session.id}
                   pricedCount={session.stats.priced}
+                  compact
                 />
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="btn-secondary !px-2.5 lg:!px-5"
                   onClick={() => {
                     setSession(null);
                     setPendingQuestion(null);
@@ -174,16 +157,10 @@ export function ProposalPage({ user }: ProposalPageProps) {
                   aria-label="Загрузить новую смету"
                 >
                   <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Новая смета</span>
+                  <span className="hidden lg:inline">Новая смета</span>
                 </button>
               </>
-            ) : (
-              // этого из приложения некуда уйти, кроме кнопки браузера
-              <Link href="/" className="btn-ghost !px-2.5 sm:hidden">
-                <ArrowLeft className="h-4 w-4" />
-                <span className="sr-only">На главную</span>
-              </Link>
-            )}
+            ) : null}
 
             {/*
               Вход и состояние пользователя — ВСЕГДА справа.
@@ -196,7 +173,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
             */}
             <UserMenu user={user} />
           </div>
-        </div>
+        </HeaderBar>
       </header>
 
       <main className="mx-auto max-w-[1500px] px-4 py-6 sm:py-8 lg:px-8">
