@@ -69,16 +69,16 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
   function humanError(raw: string): string {
     const lower = raw.toLowerCase();
     if (lower.includes("аккаунт создан") || lower.includes("войдите с тем же")) {
-      return "Аккаунт уже создан — войдите с тем же паролем. Переключаю на вход…";
+      return "Аккаунт создан. Войдите с тем же паролем.";
     }
     if (lower.includes("already exists") || lower.includes("уже существует")) {
-      return "Этот адрес уже зарегистрирован — войдите.";
+      return "Аккаунт с этой почтой уже существует. Войдите в него.";
     }
     if (lower.includes("invalid password") || lower.includes("неверный пароль")) {
       return "Неверный пароль. Попробуйте ещё раз.";
     }
     if (lower.includes("invalid email") || lower.includes("user not found")) {
-      return "Не нашли аккаунт с таким адресом. Проверьте написание или зарегистрируйтесь.";
+      return "Аккаунт с этой почтой не найден. Проверьте адрес или зарегистрируйтесь.";
     }
     if (lower.includes("password") && lower.includes("8")) {
       return "Пароль должен быть не короче 8 символов.";
@@ -102,7 +102,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
       return;
     }
     if (mode === "signup" && name.trim().length < 2) {
-      setError("Укажите имя — его видно в документах.");
+      setError("Укажите имя длиной от 2 символов.");
       return;
     }
     /**
@@ -111,7 +111,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
      * второе поле существует только здесь.
      */
     if (mode === "signup" && password !== passwordConfirm) {
-      setError("Пароли не совпадают. Проверьте, нет ли опечатки.");
+      setError("Пароли не совпадают. Введите одинаковый пароль в обоих полях.");
       return;
     }
 
@@ -129,7 +129,8 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
         // Аккаунт уже создан, остался только вход. Переключаем режим
         // сами: человеку не надо соображать, что делать дальше, — поля
         // уже заполнены, достаточно нажать «Войти».
-        if (message.includes("Переключаю на вход")) {
+        const rawError = result.error.toLowerCase();
+        if (rawError.includes("аккаунт создан") || rawError.includes("войдите с тем же")) {
           setMode("signin");
         }
         return;
@@ -168,8 +169,8 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
           {mode === "signin"
-            ? "Сметы, журнал КП и прайс привязаны к вашей организации."
-            : "Создадим личный кабинет и вашу организацию — прайс и сметы будут только вашими."}
+            ? "Войдите, чтобы работать со своими сметами и прайсом."
+            : "Создайте аккаунт для загрузки прайса поставщика и работы со сметами."}
         </p>
 
         <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
@@ -257,7 +258,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
                   className="block w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-slate-900 placeholder:text-slate-400 focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-100"
-                  placeholder="Ещё раз тот же пароль"
+                  placeholder="Повторите пароль"
                 />
                 {/*
                   Второй глазок не нужен: он переключал бы то же самое
@@ -324,7 +325,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-5">
         <p className="text-sm leading-relaxed text-slate-600">
-          Хотите просто посмотреть, как это работает? Демо не требует регистрации.
+          Демонстрационный расчёт доступен без регистрации.
         </p>
         <button
           type="button"
@@ -332,7 +333,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: Mode }) {
           disabled={busy}
           className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-100 disabled:opacity-60"
         >
-          Попробовать на демо-прайсе
+          Открыть демо
         </button>
       </div>
     </div>

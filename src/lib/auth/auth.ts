@@ -32,6 +32,7 @@
  */
 
 import { betterAuth } from "better-auth";
+import { isAnonymousUser } from "@shared/lib/auth";
 import { organization, anonymous } from "better-auth/plugins";
 import { isolatedDrizzleAdapter } from "@/db/auth-adapter";
 import { ensurePersonalOrganization } from "@/lib/auth/organization";
@@ -159,10 +160,7 @@ export const auth = betterAuth({
            * задан явно (`anon.local`) и не зависит от того, как плагин
            * проставляет флаг.
            */
-          const email = (createdUser.email ?? "").toLowerCase();
-          const isAnonymous =
-            createdUser.isAnonymous === true || email.endsWith("@anon.local");
-          if (isAnonymous) return;
+          if (isAnonymousUser(createdUser)) return;
 
           try {
             await ensurePersonalOrganization(createdUser.id, createdUser.name);

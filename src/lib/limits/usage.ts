@@ -232,7 +232,7 @@ export async function consume(opts: ConsumeOptions): Promise<LimitDecision> {
         allowed: false,
         status: 429,
         reason:
-          "Дневной лимит на ассистента исчерпан. Он обновится в 00:00 UTC — это около трёх часов ночи по Москве.",
+          "Достигнут дневной лимит запросов к ассистенту. Следующий период начнётся в 03:00 по московскому времени.",
         remaining: 0,
         resetAt: nextDay,
         headers: {

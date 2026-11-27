@@ -48,7 +48,7 @@ const TOOLS = [
   },
   {
     name: "get_proposal",
-    what: "Сводка готового КП: сколько позиций, где проблемы",
+    what: "Итоговая стоимость КП и позиции, требующие уточнения",
     example: "«покажи итоги сметы»",
   },
   {
@@ -111,19 +111,15 @@ export default function McpPage() {
           </h1>
         </div>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Сервис работает внутри Claude, ChatGPT и Cursor по протоколу MCP.
-          Кидаете смету в чат и пишете «сделай КП» — ассистент сам разбирает
-          строки и достаёт цены из прайса.
+          Подключите поиск по прайсу, сопоставление позиций и просмотр КП к клиенту с поддержкой MCP — например, Claude, ChatGPT или Cursor.
         </p>
 
         {/* ── Главный принцип ─────────────────────────────── */}
         <div className="mt-6 flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3.5">
           <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
           <p className="text-sm leading-relaxed text-emerald-900">
-            <strong className="font-semibold">Цену по-прежнему ставит код.</strong>{" "}
-            Инструмента «назначь цену» не существует — ни для модели, ни для
-            кого-либо ещё. Ассистент может только сопоставить строку с
-            существующей позицией прайса.
+            <strong className="font-semibold">Цены из прайса поставщика.</strong>{" "}
+            При сопоставлении стоимость берётся из прайса вашей организации. Позиции без однозначного соответствия требуют проверки.
           </p>
         </div>
 
@@ -136,11 +132,10 @@ export default function McpPage() {
           <ol className="mt-4 space-y-5">
             <li>
               <p className="text-sm font-medium text-slate-800">
-                1. Возьмите токен в кабинете
+                1. Подготовьте токен доступа
               </p>
               <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                Токен привязан к организации: по нему сервер понимает, чей
-                прайс и чьи сметы показывать. Один токен — одна организация.
+                Для подключения необходим токен вашей организации. Он предоставляет доступ к её прайсу и коммерческим предложениям.
               </p>
             </li>
 
@@ -159,11 +154,10 @@ export default function McpPage() {
 
             <li>
               <p className="text-sm font-medium text-slate-800">
-                3. Спросите что-нибудь про прайс
+                3. Проверьте подключение
               </p>
               <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                «Что есть по отводам 250?» или «Сопоставь: воздуховод 315».
-                Ассистент вызовет нужный инструмент и покажет ответ.
+                Задайте вопрос о наличии оборудования или сопоставьте позицию со сметой: «Сопоставьте: воздуховод 315».
               </p>
             </li>
           </ol>
@@ -174,7 +168,7 @@ export default function McpPage() {
           <div className="flex items-center gap-2">
             <Wrench className="h-4 w-4 text-slate-500" aria-hidden />
             <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-              Что умеет
+              Доступные операции
             </h2>
           </div>
 
@@ -215,31 +209,25 @@ export default function McpPage() {
         {/* ── Технические детали ──────────────────────────── */}
         <section className="mt-8">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-            Как устроено
+            Параметры подключения
           </h2>
           <dl className="mt-3 space-y-3 text-sm leading-relaxed text-slate-600">
             <div>
               <dt className="font-medium text-slate-800">Спецификация 2026-07-28</dt>
               <dd className="mt-0.5">
-                Протокол stateless: нет handshake <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">initialize</code> и
-                заголовка <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">Mcp-Session-Id</code>.
-                Для serverless это то, что нужно — каждый вызов может попасть
-                на любой экземпляр функции.
+                Запросы независимы. Инициализация сессии и заголовок Mcp-Session-Id не требуются.
               </dd>
             </div>
             <div>
               <dt className="font-medium text-slate-800">Транспорт</dt>
               <dd className="mt-0.5">
-                Streamable HTTP, ответы в JSON. Один route handler Next.js,
-                без отдельного сервиса.
+                Streamable HTTP. Ответы возвращаются в формате JSON.
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-slate-800">Ограничение</dt>
+              <dt className="font-medium text-slate-800">Авторизация</dt>
               <dd className="mt-0.5">
-                Авторизация — Bearer-токен, а не полный OAuth 2.1 с
-                регистрацией клиентов. Для внутреннего инструмента этого
-                достаточно; OAuth — следующий шаг.
+                Передайте токен организации в заголовке Authorization: Bearer &lt;токен&gt;. OAuth 2.1 не поддерживается.
               </dd>
             </div>
           </dl>
@@ -256,7 +244,7 @@ export default function McpPage() {
             href="/status"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400"
           >
-            Метрики сервиса
+            Статистика сервиса
           </Link>
         </div>
       </main>
