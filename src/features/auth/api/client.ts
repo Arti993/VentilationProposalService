@@ -8,6 +8,8 @@
  * нужно здесь, а не в десяти компонентах.
  */
 
+import { isAnonymousUser } from "@shared/lib/auth";
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -74,7 +76,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         id: string;
         name: string;
         email: string;
-        isAnonymous?: boolean;
+        isAnonymous?: boolean | null;
         image?: string | null;
       };
     } | null;
@@ -83,7 +85,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       id: json.user.id,
       name: json.user.name,
       email: json.user.email,
-      isAnonymous: Boolean(json.user.isAnonymous),
+      isAnonymous: isAnonymousUser(json.user),
       image: json.user.image ?? null,
     };
   } catch {

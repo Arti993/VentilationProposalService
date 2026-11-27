@@ -30,6 +30,8 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname);
 
 export default defineConfig({
+  // Next.js сохраняет JSX для сборки; тестам серверных страниц нужен готовый JS.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     /** Только юниты. Сквозные сценарии живут в scripts/ и запускаются отдельно. */
     include: ["src/**/*.test.ts"],

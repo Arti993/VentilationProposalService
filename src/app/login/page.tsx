@@ -30,7 +30,8 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const actor = await getActor();
-  if (actor?.userId) redirect("/app");
+  // Демо-сессия не должна закрывать доступ к входу и регистрации.
+  if (actor?.userId && !actor.isAnonymous) redirect("/app");
 
   return (
     <main className="flex min-h-screen flex-col bg-slate-50">
