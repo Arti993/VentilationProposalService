@@ -10,6 +10,8 @@ interface DownloadProposalProps {
   /** Сколько позиций получит цену — показываем в подсказке */
   pricedCount: number;
   className?: string;
+  /** На телефоне в шапке оставляем только иконку. */
+  compact?: boolean;
 }
 
 /**
@@ -22,6 +24,7 @@ export function DownloadProposal({
   sessionId,
   pricedCount,
   className,
+  compact = false,
 }: DownloadProposalProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +49,8 @@ export function DownloadProposal({
         type="button"
         onClick={handle}
         disabled={disabled}
-        className="btn-primary text-sm"
+        className={cn("btn-primary text-sm", compact && "px-2.5 sm:px-5")}
+        aria-label={busy ? "Формирую КП" : "Скачать КП"}
         title={
           pricedCount === 0
             ? "Нет позиций с ценой — КП будет пустым"
@@ -56,12 +60,12 @@ export function DownloadProposal({
         {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Формирую…
+            <span className={cn(compact && "hidden sm:inline")}>Формирую…</span>
           </>
         ) : (
           <>
             <Download className="h-4 w-4" />
-            Скачать КП
+            <span className={cn(compact && "hidden sm:inline")}>Скачать КП</span>
           </>
         )}
       </button>

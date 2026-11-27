@@ -24,10 +24,9 @@
  * отрендерить страницу при сборке, база будет недоступна, и сборка упадёт.
  */
 
-import Link from "next/link";
-import { ArrowLeft, Activity } from "lucide-react";
+import { Activity } from "lucide-react";
 import { productMetrics, type ProductMetrics } from "@/db/repositories/metrics";
-import { Logo } from "@shared/ui/Logo";
+import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import { UserMenu } from "@widgets/user-menu";
 import { getActor } from "@/lib/auth/guard";
 
@@ -155,21 +154,10 @@ export default async function StatusPage() {
   return (
     <div className="min-h-screen bg-slate-50/70">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            На главную
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block">
-              <Logo />
-            </span>
-            <UserMenu user={user} />
-          </div>
-        </div>
+        <HeaderBar>
+          <HeaderBrand />
+          <UserMenu user={user} />
+        </HeaderBar>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">

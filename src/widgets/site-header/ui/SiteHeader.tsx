@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { Logo } from "@shared/ui/Logo";
+import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import { UserMenu } from "@widgets/user-menu";
 
 const NAV = [
@@ -70,19 +71,11 @@ export function SiteHeader() {
           : "border-b border-transparent bg-transparent",
       )}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-5 lg:px-8">
-        <Link href="/" aria-label="На главную" className="min-w-0 shrink">
-          {/* На узком экране — только знак: см. комментарий выше */}
-          <span className="sm:hidden">
-            <Logo withWordmark={false} />
-          </span>
-          <span className="hidden sm:block">
-            <Logo />
-          </span>
-        </Link>
+      <HeaderBar>
+        <HeaderBrand showHomeLink={false} />
 
         {/* Навигация на десктопе */}
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-1 xl:flex">
           {NAV.map((n) => (
             <a
               key={n.href}
@@ -111,7 +104,7 @@ export function SiteHeader() {
 
           <button
             type="button"
-            className="btn-ghost -mr-2 !px-2.5 md:hidden"
+            className="btn-ghost -mr-2 !px-2.5 xl:hidden"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Закрыть меню" : "Открыть меню"}
             aria-expanded={open}
@@ -120,13 +113,13 @@ export function SiteHeader() {
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
-      </div>
+      </HeaderBar>
 
       {/* Мобильное меню */}
       {open && (
         <div
           id="mobile-nav"
-          className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-4 sm:px-5 md:hidden"
+          className="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-slate-200 bg-white px-4 py-4 sm:px-5 xl:hidden"
         >
           {/* Название целиком: в шапке на телефоне его нет */}
           <div className="mb-3 border-b border-slate-100 pb-3 sm:hidden">

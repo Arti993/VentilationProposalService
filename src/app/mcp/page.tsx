@@ -15,8 +15,8 @@
  * пример не сработал бы нигде.
  */
 import Link from "next/link";
-import { ArrowLeft, Server, Shield, Wrench } from "lucide-react";
-import { Logo } from "@shared/ui/Logo";
+import { Server, Shield, Wrench } from "lucide-react";
+import { HeaderBar, HeaderBrand } from "@shared/ui/HeaderLayout";
 import { UserMenu } from "@widgets/user-menu";
 
 /**
@@ -96,25 +96,11 @@ export default function McpPage() {
   return (
     <div className="min-h-screen bg-slate-50/70">
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-500 transition-colors hover:text-slate-900"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            На главную
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block">
-              <Logo />
-            </span>
-            {/*
-              Страница статическая, поэтому сессию спрашивает сам `UserMenu`
-              в браузере. До ответа — заглушка того же размера.
-            */}
-            <UserMenu />
-          </div>
-        </div>
+        <HeaderBar>
+          <HeaderBrand />
+          {/* Статическая страница получает сессию в браузере. */}
+          <UserMenu />
+        </HeaderBar>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
