@@ -12,7 +12,7 @@
  * чтобы оно не вернулось.
  */
 import { describe, it, expect } from "vitest";
-import { decodeCsv } from "@/lib/price/parse";
+import { decodeCsv, parsePriceWorkbook, MAX_PRICE_ITEMS } from "@/lib/price/parse";
 import { normalize, matchKey } from "@/lib/price/normalize";
 
 /** Кодирует строку в UTF-8 байты и отдаёт как ArrayBuffer. */
@@ -159,5 +159,24 @@ describe("matchKey", () => {
     const a = normalize("Отвод сегментный 90 градусов 250", 441, 0);
     const b = normalize("Отвод сегментный 45 градусов 250", 326, 1);
     expect(matchKey(a)).not.toBe(matchKey(b));
+  });
+});
+
+
+describe("размер прайса", () => {
+  function csv(count: number) {
+    return utf8("Код;Наименование;Цена\n" + Array.from({ length: count }, (_, i) =>
+      `p${i};Воздуховод спирально-навивной 315;100`).join("\n"));
+  }
+
+  it("принимает ровно 5000 позиций", () => {
+    const result = parsePriceWorkbook(csv(MAX_PRICE_ITEMS));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.items).toHaveLength(MAX_PRICE_ITEMS);
+  });
+
+  it("отклоняет прайс сверх лимита целиком", () => {
+    const result = parsePriceWorkbook(csv(MAX_PRICE_ITEMS + 1));
+    expect(result.ok).toBe(false);
   });
 });
