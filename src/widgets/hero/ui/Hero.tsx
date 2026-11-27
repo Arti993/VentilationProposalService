@@ -38,13 +38,11 @@ export function Hero() {
         <div className="max-w-xl animate-slide-up">
           <h1 className="text-[2rem] font-semibold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-display">
             Коммерческое предложение{" "}
-            <span className="text-accent-600">за минуту</span>
+            <span className="text-accent-600">по смете клиента</span>
           </h1>
 
           <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-600 sm:mt-6 sm:text-lg">
-            Загрузите смету клиента — сервис сопоставит каждую позицию с прайсом и
-            соберёт готовый документ. Цена появляется только там, где совпадение
-            однозначное.
+            Сопоставьте позиции с прайсом поставщика, проверьте стоимость и скачайте коммерческое предложение в Word.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

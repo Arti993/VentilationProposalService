@@ -52,14 +52,14 @@ async function call(
       const msg =
         (json as { message?: string; error?: string } | null)?.message ??
         (json as { error?: string } | null)?.error ??
-        `Ошибка авторизации (HTTP ${res.status})`;
+        "Не удалось выполнить запрос. Попробуйте ещё раз.";
       return { ok: false, error: msg };
     }
     return { ok: true, data: json };
-  } catch (e) {
+  } catch {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Сеть недоступна",
+      error: "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.",
     };
   }
 }
