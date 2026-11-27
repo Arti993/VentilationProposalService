@@ -39,6 +39,7 @@
     "@langchain/langgraph": "^0.2.0",
     "@langchain/openai": "^0.3.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "@neondatabase/serverless": "1.2.2",
     "@vercel/functions": "^3.11.3",
     "autoprefixer": "^10.6.2",
     "better-auth": "^1.7.25",

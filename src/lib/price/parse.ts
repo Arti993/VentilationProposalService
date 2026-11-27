@@ -337,7 +337,7 @@ export function parsePriceWorkbook(buffer: ArrayBuffer): PriceParseResult {
 
     items.push(normalized);
 
-    if (items.length >= MAX_PRICE_ITEMS) {
+    if (items.length > MAX_PRICE_ITEMS) {
       return {
         ok: false,
         error: `В прайсе больше ${MAX_PRICE_ITEMS} позиций`,

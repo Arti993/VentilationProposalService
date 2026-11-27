@@ -28,7 +28,7 @@ import { getActor, denied } from "@/lib/auth/guard.ts";
 import { isDemoOrg } from "@/lib/auth/org.ts";
 import { parsePriceWorkbook, describeQuality } from "@/lib/price/parse.ts";
 import { replacePrice, countPrice, loadPrice } from "@/db/repositories/price.ts";
-import { savePriceMeta, getPriceMeta } from "@/db/repositories/priceMeta.ts";
+import { getPriceMeta } from "@/db/repositories/priceMeta.ts";
 import { indexPriceInBackground } from "@/db/repositories/priceIndex.ts";
 
 export const runtime = "nodejs";
@@ -154,7 +154,7 @@ export async function POST(request: Request) {
 
   let replaced: { inserted: number; removed: number };
   try {
-    replaced = await replacePrice(actor.orgId, parsed.items);
+    replaced = await replacePrice(actor.orgId, parsed.items, file.name);
   } catch (e) {
     console.error(
       "[price] не удалось сохранить прайс:",
@@ -165,31 +165,13 @@ export async function POST(request: Request) {
         ok: false,
         error: "Не удалось сохранить прайс",
         hint:
-          "Файл разобран правильно, но база не приняла данные. " +
-          "Повторите загрузку — старая версия прайса при этом не пострадала, " +
-          "если ошибка была на этапе очистки; если на вставке, прайс мог остаться пустым.",
+          "Не удалось подтвердить загрузку прайса. Проверьте его состояние и при необходимости повторите загрузку.",
       },
       { status: 500 },
     );
   }
 
   const quality = describeQuality(parsed.items);
-
-  /**
-   * Запоминаем имя файла и дату.
-   *
-   * Отдельным try: прайс уже сохранён, и падение этой записи не должно
-   * превращать успешную загрузку в ошибку. Кабинет в худшем случае не
-   * покажет имя файла — но покажет, что прайс загружен.
-   */
-  try {
-    await savePriceMeta(actor.orgId, file.name, replaced.inserted);
-  } catch (e) {
-    console.error(
-      "[price] не удалось записать сведения о прайсе:",
-      e instanceof Error ? e.message : e,
-    );
-  }
 
   /**
    * Индексация — в фоне, без ожидания.
