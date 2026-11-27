@@ -20,10 +20,10 @@ export function formatNumber(value: number | undefined): string {
 
 /** Человеческая подпись статуса позиции. */
 export const STATUS_LABEL: Record<string, string> = {
-  priced: "цена есть",
+  priced: "с ценой",
   not_found: "нет в прайсе",
   needs_human: "на проверку",
   ambiguous: "неоднозначно",
-  off_topic: "вне темы",
+  off_topic: "пропущено",
   error: "ошибка",
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import { requestErrorMessage } from "@shared/lib/errors";
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { cn } from "@shared/lib/cn";
@@ -35,7 +36,7 @@ export function DownloadProposal({
     try {
       await downloadProposal(sessionId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось скачать КП");
+      setError(requestErrorMessage(e, "Не удалось скачать КП. Попробуйте ещё раз."));
     } finally {
       setBusy(false);
     }
@@ -50,17 +51,17 @@ export function DownloadProposal({
         onClick={handle}
         disabled={disabled}
         className={cn("btn-primary text-sm", compact && "px-2.5 sm:px-5")}
-        aria-label={busy ? "Формирую КП" : "Скачать КП"}
+        aria-label={busy ? "Формирование КП" : "Скачать КП"}
         title={
           pricedCount === 0
-            ? "Нет позиций с ценой — КП будет пустым"
+            ? "Для скачивания КП нужна хотя бы одна позиция с ценой"
             : `Скачать документ: ${pricedCount} позиций с ценой`
         }
       >
         {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className={cn(compact && "hidden sm:inline")}>Формирую…</span>
+            <span className={cn(compact && "hidden sm:inline")}>Подготовка…</span>
           </>
         ) : (
           <>

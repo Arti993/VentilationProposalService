@@ -43,11 +43,7 @@ export function AccountPage({ user, price }: AccountPageProps) {
           <UserRound className="h-5 w-5 text-accent-600" aria-hidden />
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Аккаунт</h1>
         </div>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-          Имя и аватар видны только вам внутри сервиса и в документах,
-          которые вы формируете. Прайс определяет, по каким ценам считаются
-          сметы.
-        </p>
+
 
         <div className="mt-8 space-y-6">
           <AccountSettings

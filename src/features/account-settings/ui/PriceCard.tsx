@@ -78,7 +78,7 @@ export function PriceCard({
           {loaded ? (
             <>
               <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                Прайс загружен — сметы считаются по вашим ценам.
+                Прайс используется для расчёта новых смет.
               </p>
               {/*
                 Имя файла может быть неизвестно: прайс, загруженный до
@@ -89,7 +89,7 @@ export function PriceCard({
                 <div className="min-w-0">
                   <dt className="text-xs uppercase tracking-wide text-slate-500">Файл</dt>
                   <dd className="mt-0.5 truncate text-slate-900" title={shownName ?? undefined}>
-                    {shownName ?? "имя не сохранилось"}
+                    {shownName ?? "Название недоступно"}
                   </dd>
                 </div>
                 <div>
@@ -119,8 +119,7 @@ export function PriceCard({
           ) : (
             <>
               <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                Своего прайса пока нет: сметы считаются по демонстрационному
-                прайсу, и цены в КП будут тестовыми.
+                Используется демонстрационный прайс. Загрузите прайс поставщика для расчёта по вашим ценам.
               </p>
               <div className="mt-4">
                 <UploadPrice

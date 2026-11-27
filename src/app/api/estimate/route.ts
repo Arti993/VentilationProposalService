@@ -162,8 +162,8 @@ export async function POST(req: Request): Promise<NextResponse> {
             {
               ok: false,
               error:
-                "Файл похож на бинарный, хотя расширение текстовое. " +
-                "Если это Excel или Word — сохраните файл в его обычном формате.",
+                "Содержимое файла не соответствует текстовому формату. " +
+                "Сохраните документ Excel в формате .xlsx или Word в формате .docx.",
             },
             { status: 415 },
           );
@@ -178,7 +178,7 @@ export async function POST(req: Request): Promise<NextResponse> {
             {
               ok: false,
               error:
-                "Файл не похож на Excel: у него другое содержимое. " +
+                "Содержимое файла не соответствует формату Excel. " +
                 "Откройте его в Excel и сохраните как .xlsx.",
             },
             { status: 415 },
@@ -209,7 +209,7 @@ export async function POST(req: Request): Promise<NextResponse> {
             {
               ok: false,
               error:
-                "Файл не похож на Word: у него другое содержимое. " +
+                "Содержимое файла не соответствует формату Word. " +
                 "Файлы .doc (старый формат) не поддерживаются — сохраните как .docx.",
             },
             { status: 415 },
@@ -242,11 +242,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     // Повреждённый архив даёт CharacterData/CRC-ошибку из unzip —
     // пользователю нужно объяснить это человеческим языком
     const hint = /corrupt|invalid|zip|unexpected end|Central Directory/i.test(msg)
-      ? " Файл повреждён или это не настоящий документ Office."
+      ? " Файл повреждён или имеет неподдерживаемый формат. Сохраните его заново в Excel или Word."
       : "";
 
     return NextResponse.json(
-      { ok: false, error: `Не удалось обработать смету: ${msg}.${hint}` },
+      { ok: false, error: `Не удалось обработать смету. Попробуйте ещё раз.${hint}` },
       { status: 500 },
     );
   }

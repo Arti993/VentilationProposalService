@@ -18,7 +18,7 @@ const COLUMNS = [
       { href: "#faq", label: "Вопросы" },
       // Метрики — не украшение: это единственный способ проверить
       // слова «работает точно» числами, а не обещанием
-      { href: "/status", label: "Как работает сервис в цифрах" },
+      { href: "/status", label: "Статистика сервиса" },
       // MCP — самая заметная для разработчика возможность: сервис
       // работает прямо внутри Claude и Cursor
       { href: "/mcp", label: "MCP-сервер" },
@@ -41,8 +41,7 @@ export function SiteFooter() {
           <div className="max-w-sm">
             <Logo />
             <p className="mt-4 text-sm leading-relaxed text-slate-600">
-              Коммерческое предложение по смете клиента за секунды. Цены — только
-              из прайса: лучше оставить позицию без цены, чем назвать неверную.
+              Подготовка коммерческих предложений по сметам на вентиляционное оборудование. Расчёт стоимости по прайсу поставщика.
             </p>
           </div>
 
@@ -81,8 +80,7 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-relaxed text-slate-500">
-            Подключён демо-прайс по вентиляционному оборудованию. Загрузите свой
-            прайс — сметы будут считаться по вашим ценам.
+            Для знакомства с сервисом доступен демонстрационный прайс. Для рабочих расчётов загрузите прайс поставщика.
           </p>
           <p className="text-xs text-slate-500">
             © {new Date().getFullYear()} Расчёт стоимости
@@ -116,7 +114,7 @@ export function SiteFooter() {
             Исходный код на GitHub
           </a>
           <span className="text-xs text-slate-500">
-            Автор —{" "}
+            Разработка:{" "}
             <a
               href="https://github.com/Arti993"
               target="_blank"
@@ -132,7 +130,7 @@ export function SiteFooter() {
             rel="noopener noreferrer"
             className="text-xs text-slate-500 transition-colors hover:text-accent-700"
           >
-            Как это устроено внутри
+            Документация
           </a>
         </div>
       </div>

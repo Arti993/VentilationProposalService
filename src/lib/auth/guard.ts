@@ -14,6 +14,7 @@
  * утечки (подмена `org_id` в запросе) останется открытым.
  */
 
+import { isAnonymousUser } from "@shared/lib/auth";
 import { headers } from "next/headers";
 import { auth } from "./auth";
 import { DEMO_ORG_ID } from "./org";
@@ -75,9 +76,7 @@ export async function getActor(): Promise<Actor | null> {
 
   if (!session?.user) return null;
 
-  const isAnonymous =
-    (session.user as { isAnonymous?: boolean }).isAnonymous === true ||
-    (session.user.email ?? "").toLowerCase().endsWith("@anon.local");
+  const isAnonymous = isAnonymousUser(session.user);
 
   const orgId = await resolveOrganizationId(session.user.id, session.session.activeOrganizationId);
 
