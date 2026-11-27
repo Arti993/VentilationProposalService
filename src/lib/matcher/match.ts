@@ -7,6 +7,7 @@
  */
 import {
   normalize,
+  TYPE_LABEL,
   type PriceItem,
   type ItemType,
 } from "../price/normalize.ts";
@@ -132,7 +133,7 @@ export function matchLine(
     return {
       status: "not_found",
       candidates: [],
-      note: `В прайсе нет ${typeName(parsed.type)} ${parsed.dims.join("/")}${
+      note: `Позиция не найдена в прайсе: ${typeName(parsed.type).toLowerCase()} ${parsed.dims.join("/")}${
         parsed.angle ? ` ${parsed.angle}°` : ""
       }`,
     };
@@ -213,7 +214,7 @@ function hasKindWord(line: string): boolean {
 }
 
 function typeName(t: ItemType): string {
-  return t;
+  return TYPE_LABEL[t];
 }
 
 /**

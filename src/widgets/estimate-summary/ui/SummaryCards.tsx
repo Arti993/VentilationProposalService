@@ -54,7 +54,7 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
 
       <Card
         icon={CheckCircle2}
-        label="Цена проставлена"
+        label="С ценой"
         value={String(stats.priced)}
         hint="позиций из прайса"
         tone="ok"
@@ -63,7 +63,7 @@ export function SummaryCards({ stats }: SummaryCardsProps) {
         icon={AlertTriangle}
         label="Нет в прайсе"
         value={String(stats.notFound)}
-        hint="уточнит менеджер"
+        hint="требуют уточнения"
         tone="warn"
       />
       <Card

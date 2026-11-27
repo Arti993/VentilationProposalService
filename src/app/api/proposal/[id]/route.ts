@@ -64,7 +64,7 @@ export async function GET(
         {
           ok: false,
           error:
-            "В смете нет ни одной позиции с ценой — формировать КП не из чего. " +
+            "Для формирования КП нужна хотя бы одна позиция с ценой. " +
             "Проверьте, что позиции есть в прайсе.",
         },
         { status: 422 },
@@ -90,7 +90,7 @@ export async function GET(
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/proposal]", msg);
     return NextResponse.json(
-      { ok: false, error: `Не удалось сформировать КП: ${msg}` },
+      { ok: false, error: "Не удалось сформировать КП. Попробуйте ещё раз." },
       { status: 500 },
     );
   }

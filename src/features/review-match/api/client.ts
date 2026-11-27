@@ -61,7 +61,7 @@ export async function submitFeedback(input: SubmitFeedbackInput): Promise<Feedba
   };
 
   if (!res.ok || json.ok !== true || !json.feedback) {
-    const parts = [json.error ?? `Ошибка (HTTP ${res.status})`, json.hint].filter(Boolean);
+    const parts = [json.error ?? "Не удалось сохранить соответствие. Попробуйте ещё раз.", json.hint].filter(Boolean);
     throw new Error(parts.join(". "));
   }
 
@@ -82,7 +82,7 @@ export async function loadFeedback(): Promise<{
   };
 
   if (!res.ok || json.ok !== true) {
-    throw new Error(json.error ?? `Ошибка чтения (HTTP ${res.status})`);
+    throw new Error(json.error ?? "Не удалось загрузить соответствия. Попробуйте ещё раз.");
   }
 
   return {
@@ -103,6 +103,6 @@ export async function setFeedbackStatus(
   });
   if (!res.ok) {
     const json = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(json.error ?? `Ошибка (HTTP ${res.status})`);
+    throw new Error(json.error ?? "Не удалось сохранить соответствие. Попробуйте ещё раз.");
   }
 }

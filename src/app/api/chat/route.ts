@@ -133,7 +133,7 @@ export async function POST(req: Request): Promise<Response> {
     const question = (body.question ?? "").trim();
 
     if (!question) {
-      return NextResponse.json({ ok: false, error: "Пустой вопрос." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Введите вопрос." }, { status: 400 });
     }
     if (question.length > 2000) {
       return NextResponse.json(
@@ -279,7 +279,7 @@ export async function POST(req: Request): Promise<Response> {
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error("[api/chat] поток", msg);
-          send(controller, "error", { message: `Не удалось получить ответ: ${msg}` });
+          send(controller, "error", { message: "Не удалось получить ответ. Попробуйте ещё раз." });
         } finally {
           controller.close();
 
@@ -295,7 +295,7 @@ export async function POST(req: Request): Promise<Response> {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/chat]", msg);
     return NextResponse.json(
-      { ok: false, error: `Не удалось получить ответ: ${msg}` },
+      { ok: false, error: "Не удалось получить ответ. Попробуйте ещё раз." },
       { status: 500 },
     );
   }
