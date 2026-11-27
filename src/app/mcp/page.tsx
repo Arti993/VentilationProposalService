@@ -247,13 +247,13 @@ export default function McpPage() {
 
         <div className="mt-10 flex flex-wrap gap-3">
           <Link
-            href="/app"
+            prefetch={true} href="/app"
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-700"
           >
             Открыть приложение
           </Link>
           <Link
-            href="/status"
+            prefetch={true} href="/status"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-400"
           >
             Метрики сервиса

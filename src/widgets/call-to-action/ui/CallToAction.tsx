@@ -33,7 +33,7 @@ export function CallToAction() {
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-3">
-            <Link href="/app" className="btn-inverse btn-lg">
+            <Link prefetch={true} href="/app" className="btn-inverse btn-lg">
               Открыть приложение
               <ArrowRight className="h-4 w-4" />
             </Link>

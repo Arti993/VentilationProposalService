@@ -97,7 +97,7 @@ export function SiteHeader() {
           */}
           <UserMenu />
 
-          <Link href="/app" className="btn-primary hidden sm:inline-flex">
+          <Link prefetch={true} href="/app" className="btn-primary hidden sm:inline-flex">
             Попробовать
             <ArrowRight className="h-4 w-4" />
           </Link>
@@ -140,7 +140,7 @@ export function SiteHeader() {
               </a>
             ))}
             <Link
-              href="/app"
+              prefetch={true} href="/app"
               onClick={() => setOpen(false)}
               className="btn-primary mt-3 min-h-12 w-full"
             >
