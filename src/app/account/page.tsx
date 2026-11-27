@@ -24,8 +24,10 @@ export default async function AccountRoute() {
   if (!actor || actor.isAnonymous) redirect("/login");
 
   const orgId = actor.orgId;
-  const total = orgId ? await countPrice(orgId) : 0;
-  const meta = orgId ? await getPriceMeta(orgId) : null;
+  const [total, meta] = await Promise.all([
+    orgId ? countPrice(orgId) : Promise.resolve(0),
+    orgId ? getPriceMeta(orgId) : Promise.resolve(null),
+  ]);
 
   /**
    * «Свой прайс» = не демо и есть позиции.

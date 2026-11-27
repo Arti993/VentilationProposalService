@@ -28,14 +28,8 @@ import type { EstimateSession, EstimatePosition } from "@entities/estimate/model
 type Session = EstimateSession & { id: string };
 
 export interface ProposalPageProps {
-  /**
-   * Кто пришёл — известно на сервере (`/app` читает сессию).
-   *
-   * `null` — гость. Передаётся пропсом, а не запрашивается в браузере:
-   * иначе шапка показывала бы «Войти» вошедшему человеку, пока идёт
-   * запрос.
-   */
-  user: { name: string; email: string; image: string | null } | null;
+  /** undefined — меню загрузит сессию отдельно от формы сметы. */
+  user?: { name: string; email: string; image: string | null } | null;
 }
 
 export function ProposalPage({ user }: ProposalPageProps) {
@@ -233,7 +227,7 @@ export function ProposalPage({ user }: ProposalPageProps) {
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-slate-700">
                   Файл «{justUploaded.fileName}» используется для новых расчётов. Заменить прайс можно в{" "}
-                  <Link href="/account" className="font-medium text-accent-700 hover:underline">
+                  <Link prefetch={true} href="/account" className="font-medium text-accent-700 hover:underline">
                     настройках аккаунта
                   </Link>
                   .

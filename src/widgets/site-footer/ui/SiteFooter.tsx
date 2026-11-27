@@ -55,7 +55,7 @@ export function SiteFooter() {
                   <li key={`${col.title}-${l.href}-${l.label}`}>
                     {l.href.startsWith("/") ? (
                       <Link
-                        href={l.href}
+                        prefetch={true} href={l.href}
                         // -my-1 py-1: сама ссылка остаётся текстом, но
                         // зона нажатия растёт до 36px. На телефоне палец
                         // шириной 10 мм не попадает в строку высотой 19px

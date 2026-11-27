@@ -84,7 +84,7 @@ export function Precision() {
             })}
 
             <Link
-              href="/app"
+              prefetch={true} href="/app"
               className="group flex items-center justify-between rounded-2xl border border-accent-600/15
                          bg-accent-50/60 px-6 py-5 transition-colors hover:bg-accent-50"
             >

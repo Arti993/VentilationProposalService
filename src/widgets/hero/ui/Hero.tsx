@@ -46,7 +46,7 @@ export function Hero() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Link href="/app" className="btn-primary btn-lg w-full sm:w-auto">
+            <Link prefetch={true} href="/app" className="btn-primary btn-lg w-full sm:w-auto">
               Загрузить смету
               <ArrowRight className="h-4 w-4" />
             </Link>
